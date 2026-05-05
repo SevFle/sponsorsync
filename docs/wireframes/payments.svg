@@ -1,0 +1,108 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="900" viewBox="0 0 1200 900">
+<style>text {font-family='Segoe UI, Arial, sans-serif'}</style>
+<rect width='100%' height='100%' fill='#ffffff'/>
+<rect x='0' y='0' width='1200' height='56' fill='#2c3e50'/>
+<text x='24' y='36' fill='#fff' font-size='20' font-weight='bold'>SponsorHub — Payments</text>
+<circle cx='1170' cy='28' r='14' fill='#4A90D9'/>
+<text x='1165' y='33' fill='#fff' font-size='12' text-anchor='middle'>U</text>
+<text x='24' y='76' fill='#555' font-size='11' font-weight='bold' letter-spacing='1'>REVENUE SUMMARY</text>
+<rect x='24' y='86' width='268' height='90' rx='6' fill='#f7f8fa' stroke='#ddd'/>
+<rect x='24' y='86' width='268' height='4' rx='2' fill='#27ae60'/>
+<text x='40' y='116' fill='#888' font-size='12'>Total Earned</text>
+<text x='40' y='148' fill='#333' font-size='28' font-weight='bold'>$124,500</text>
+<rect x='304' y='86' width='268' height='90' rx='6' fill='#f7f8fa' stroke='#ddd'/>
+<rect x='304' y='86' width='268' height='4' rx='2' fill='#4A90D9'/>
+<text x='320' y='116' fill='#888' font-size='12'>Expected (30d)</text>
+<text x='320' y='148' fill='#333' font-size='28' font-weight='bold'>$18,200</text>
+<rect x='584' y='86' width='268' height='90' rx='6' fill='#f7f8fa' stroke='#ddd'/>
+<rect x='584' y='86' width='268' height='4' rx='2' fill='#e74c3c'/>
+<text x='600' y='116' fill='#888' font-size='12'>Overdue</text>
+<text x='600' y='148' fill='#333' font-size='28' font-weight='bold'>$4,200</text>
+<rect x='864' y='86' width='268' height='90' rx='6' fill='#f7f8fa' stroke='#ddd'/>
+<rect x='864' y='86' width='268' height='4' rx='2' fill='#9b59b6'/>
+<text x='880' y='116' fill='#888' font-size='12'>Avg. Deal Value</text>
+<text x='880' y='148' fill='#333' font-size='28' font-weight='bold'>$8,750</text>
+<rect x='24' y='194' width='1152' height='44' rx='6' fill='#e74c3c' opacity='0.1'/>
+<rect x='24' y='194' width='4' height='44' rx='2' fill='#e74c3c'/>
+<text x='44' y='220' fill='#e74c3c' font-size='14' font-weight='bold'>&#9888; 3 overdue payments totaling $4,200 require attention</text>
+<rect x='24' y='252' width='140' height='34' rx='4' fill='#4A90D9'/>
+<text x='94.0' y='274' fill='#fff' font-size='13' text-anchor='middle'>All</text>
+<rect x='172' y='252' width='140' height='34' rx='4' fill='#e9ecef'/>
+<text x='242.0' y='274' fill='#555' font-size='13' text-anchor='middle'>Paid</text>
+<rect x='320' y='252' width='140' height='34' rx='4' fill='#e9ecef'/>
+<text x='390.0' y='274' fill='#555' font-size='13' text-anchor='middle'>Pending</text>
+<rect x='468' y='252' width='140' height='34' rx='4' fill='#e9ecef'/>
+<text x='538.0' y='274' fill='#555' font-size='13' text-anchor='middle'>Overdue</text>
+<rect x='24' y='300' width='1140' height='32' fill='#f0f2f5'/>
+<text x='34' y='321' fill='#666' font-size='12' font-weight='bold'>Sponsor</text>
+<text x='274' y='321' fill='#666' font-size='12' font-weight='bold'>Deal</text>
+<text x='434' y='321' fill='#666' font-size='12' font-weight='bold'>Amount</text>
+<text x='564' y='321' fill='#666' font-size='12' font-weight='bold'>Due Date</text>
+<text x='684' y='321' fill='#666' font-size='12' font-weight='bold'>Status</text>
+<text x='864' y='321' fill='#666' font-size='12' font-weight='bold'>Paid Date</text>
+<text x='1044' y='321' fill='#666' font-size='12' font-weight='bold'>Actions</text>
+<rect x='24' y='336' width='1140' height='40' fill='#fff' stroke='#f0f2f5'/>
+<text x='34' y='362' fill='#444' font-size='12'>Acme Corp</text>
+<text x='274' y='362' fill='#444' font-size='12'>Q2 Package</text>
+<text x='434' y='362' fill='#444' font-size='12'>$4,200</text>
+<text x='564' y='362' fill='#444' font-size='12'>May 1</text>
+<text x='684' y='362' fill='#27ae60' font-size='12'>&#8226;</text>
+<text x='864' y='362' fill='#444' font-size='12'>Apr 28</text>
+<text x='1044' y='362' fill='#444' font-size='12'></text>
+<rect x='24' y='378' width='1140' height='40' fill='#fafbfc' stroke='#f0f2f5'/>
+<text x='34' y='404' fill='#444' font-size='12'>TechStart Inc</text>
+<text x='274' y='404' fill='#444' font-size='12'>Newsletter</text>
+<text x='434' y='404' fill='#444' font-size='12'>$2,250</text>
+<text x='564' y='404' fill='#444' font-size='12'>May 5</text>
+<text x='684' y='404' fill='#27ae60' font-size='12'>&#8226;</text>
+<text x='864' y='404' fill='#444' font-size='12'>May 3</text>
+<text x='1044' y='404' fill='#444' font-size='12'></text>
+<rect x='24' y='420' width='1140' height='40' fill='#fff' stroke='#f0f2f5'/>
+<text x='34' y='446' fill='#444' font-size='12'>BlueSky Ltd</text>
+<text x='274' y='446' fill='#444' font-size='12'>Multi-platform</text>
+<text x='434' y='446' fill='#444' font-size='12'>$2,700</text>
+<text x='564' y='446' fill='#444' font-size='12'>May 1</text>
+<text x='684' y='446' fill='#e74c3c' font-size='12'>&#8226;</text>
+<text x='864' y='446' fill='#444' font-size='12'>—</text>
+<text x='1044' y='446' fill='#444' font-size='12'></text>
+<rect x='1034' y='426' width='100' height='26' rx='4' fill='#e74c3c'/>
+<text x='1084.0' y='444.0' fill='#fff' font-size='13' text-anchor='middle'>Mark Paid</text>
+<rect x='24' y='462' width='1140' height='40' fill='#fafbfc' stroke='#f0f2f5'/>
+<text x='34' y='488' fill='#444' font-size='12'>MediaGroup</text>
+<text x='274' y='488' fill='#444' font-size='12'>Annual Ptnr</text>
+<text x='434' y='488' fill='#444' font-size='12'>$6,000</text>
+<text x='564' y='488' fill='#444' font-size='12'>May 15</text>
+<text x='684' y='488' fill='#e67e22' font-size='12'>&#8226;</text>
+<text x='864' y='488' fill='#444' font-size='12'>—</text>
+<text x='1044' y='488' fill='#444' font-size='12'></text>
+<rect x='1034' y='468' width='100' height='26' rx='4' fill='#e67e22'/>
+<text x='1084.0' y='486.0' fill='#fff' font-size='13' text-anchor='middle'>Mark Paid</text>
+<rect x='24' y='504' width='1140' height='40' fill='#fff' stroke='#f0f2f5'/>
+<text x='34' y='530' fill='#444' font-size='12'>Acme Corp</text>
+<text x='274' y='530' fill='#444' font-size='12'>Q2 Package</text>
+<text x='434' y='530' fill='#444' font-size='12'>$4,200</text>
+<text x='564' y='530' fill='#444' font-size='12'>Jun 15</text>
+<text x='684' y='530' fill='#e67e22' font-size='12'>&#8226;</text>
+<text x='864' y='530' fill='#444' font-size='12'>—</text>
+<text x='1044' y='530' fill='#444' font-size='12'></text>
+<rect x='1034' y='510' width='100' height='26' rx='4' fill='#e67e22'/>
+<text x='1084.0' y='528.0' fill='#fff' font-size='13' text-anchor='middle'>Mark Paid</text>
+<rect x='24' y='546' width='1140' height='40' fill='#fafbfc' stroke='#f0f2f5'/>
+<text x='34' y='572' fill='#444' font-size='12'>GreenCo</text>
+<text x='274' y='572' fill='#444' font-size='12'>Ep 40-45</text>
+<text x='434' y='572' fill='#444' font-size='12'>$3,000</text>
+<text x='564' y='572' fill='#444' font-size='12'>Apr 15</text>
+<text x='684' y='572' fill='#27ae60' font-size='12'>&#8226;</text>
+<text x='864' y='572' fill='#444' font-size='12'>Apr 12</text>
+<text x='1044' y='572' fill='#444' font-size='12'></text>
+<rect x='24' y='588' width='1140' height='40' fill='#fff' stroke='#f0f2f5'/>
+<text x='34' y='614' fill='#444' font-size='12'>BlueSky Ltd</text>
+<text x='274' y='614' fill='#444' font-size='12'>Multi-platform</text>
+<text x='434' y='614' fill='#444' font-size='12'>$2,800</text>
+<text x='564' y='614' fill='#444' font-size='12'>May 10</text>
+<text x='684' y='614' fill='#e74c3c' font-size='12'>&#8226;</text>
+<text x='864' y='614' fill='#444' font-size='12'>—</text>
+<text x='1044' y='614' fill='#444' font-size='12'></text>
+<rect x='1034' y='594' width='100' height='26' rx='4' fill='#e74c3c'/>
+<text x='1084.0' y='612.0' fill='#fff' font-size='13' text-anchor='middle'>Mark Paid</text>
+</svg>

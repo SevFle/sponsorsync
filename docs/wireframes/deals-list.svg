@@ -1,0 +1,70 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="900" viewBox="0 0 1200 900">
+<style>text {font-family='Segoe UI, Arial, sans-serif'}</style>
+<rect width='100%' height='100%' fill='#ffffff'/>
+<rect x='0' y='0' width='1200' height='56' fill='#2c3e50'/>
+<text x='24' y='36' fill='#fff' font-size='20' font-weight='bold'>SponsorHub — Deals</text>
+<circle cx='1170' cy='28' r='14' fill='#4A90D9'/>
+<text x='1165' y='33' fill='#fff' font-size='12' text-anchor='middle'>U</text>
+<rect x='24' y='70' width='1152' height='40' rx='4' fill='#fff' stroke='#ccc'/>
+<text x='34' y='94.0' fill='#aaa' font-size='13'>Search deals by sponsor, status, or keyword...</text>
+<rect x='24' y='126' width='140' height='34' rx='4' fill='#4A90D9'/>
+<text x='94.0' y='148' fill='#fff' font-size='13' text-anchor='middle'>All Deals</text>
+<rect x='172' y='126' width='140' height='34' rx='4' fill='#e9ecef'/>
+<text x='242.0' y='148' fill='#555' font-size='13' text-anchor='middle'>Active</text>
+<rect x='320' y='126' width='140' height='34' rx='4' fill='#e9ecef'/>
+<text x='390.0' y='148' fill='#555' font-size='13' text-anchor='middle'>Pending</text>
+<rect x='468' y='126' width='140' height='34' rx='4' fill='#e9ecef'/>
+<text x='538.0' y='148' fill='#555' font-size='13' text-anchor='middle'>Completed</text>
+<rect x='616' y='126' width='140' height='34' rx='4' fill='#e9ecef'/>
+<text x='686.0' y='148' fill='#555' font-size='13' text-anchor='middle'>Archived</text>
+<rect x='24' y='176' width='1152' height='88' rx='6' fill='#f7f8fa' stroke='#ddd' stroke-width='1'/>
+<text x='38' y='200' fill='#333' font-size='14' font-weight='600'>Acme Corp</text>
+<text x='38' y='218' fill='#888' font-size='12'>Q2 Podcast Package</text>
+<text x='1120' y='200' fill='#333' font-size='16' font-weight='bold' text-anchor='end'>$12,000</text>
+<rect x='990' y='224' width='64' height='22' rx='11' fill='#27ae60' opacity='0.15'/>
+<text x='1022.0' y='239' fill='#27ae60' font-size='11' text-anchor='middle'>Active</text>
+<rect x='48' y='240' width='400' height='4' rx='2' fill='#e9ecef'/>
+<rect x='48' y='240' width='280' height='4' rx='2' fill='#27ae60'/>
+<rect x='24' y='276' width='1152' height='88' rx='6' fill='#f7f8fa' stroke='#ddd' stroke-width='1'/>
+<text x='38' y='300' fill='#333' font-size='14' font-weight='600'>TechStart Inc</text>
+<text x='38' y='318' fill='#888' font-size='12'>Newsletter Sponsorship</text>
+<text x='1120' y='300' fill='#333' font-size='16' font-weight='bold' text-anchor='end'>$4,500</text>
+<rect x='990' y='324' width='64' height='22' rx='11' fill='#27ae60' opacity='0.15'/>
+<text x='1022.0' y='339' fill='#27ae60' font-size='11' text-anchor='middle'>Active</text>
+<rect x='48' y='340' width='400' height='4' rx='2' fill='#e9ecef'/>
+<rect x='48' y='340' width='280' height='4' rx='2' fill='#27ae60'/>
+<rect x='24' y='376' width='1152' height='88' rx='6' fill='#f7f8fa' stroke='#ddd' stroke-width='1'/>
+<text x='38' y='400' fill='#333' font-size='14' font-weight='600'>BlueSky Ltd</text>
+<text x='38' y='418' fill='#888' font-size='12'>Multi-platform Bundle</text>
+<text x='1120' y='400' fill='#333' font-size='16' font-weight='bold' text-anchor='end'>$8,200</text>
+<rect x='990' y='424' width='72' height='22' rx='11' fill='#e67e22' opacity='0.15'/>
+<text x='1026.0' y='439' fill='#e67e22' font-size='11' text-anchor='middle'>Pending</text>
+<rect x='48' y='440' width='400' height='4' rx='2' fill='#e9ecef'/>
+<rect x='48' y='440' width='120' height='4' rx='2' fill='#e67e22'/>
+<rect x='24' y='476' width='1152' height='88' rx='6' fill='#f7f8fa' stroke='#ddd' stroke-width='1'/>
+<text x='38' y='500' fill='#333' font-size='14' font-weight='600'>MediaGroup</text>
+<text x='38' y='518' fill='#888' font-size='12'>Annual Partnership</text>
+<text x='1120' y='500' fill='#333' font-size='16' font-weight='bold' text-anchor='end'>$36,000</text>
+<rect x='990' y='524' width='64' height='22' rx='11' fill='#27ae60' opacity='0.15'/>
+<text x='1022.0' y='539' fill='#27ae60' font-size='11' text-anchor='middle'>Active</text>
+<rect x='48' y='540' width='400' height='4' rx='2' fill='#e9ecef'/>
+<rect x='48' y='540' width='280' height='4' rx='2' fill='#27ae60'/>
+<rect x='24' y='576' width='1152' height='88' rx='6' fill='#f7f8fa' stroke='#ddd' stroke-width='1'/>
+<text x='38' y='600' fill='#333' font-size='14' font-weight='600'>GreenCo</text>
+<text x='38' y='618' fill='#888' font-size='12'>Episode 40-45 Run</text>
+<text x='1120' y='600' fill='#333' font-size='16' font-weight='bold' text-anchor='end'>$6,000</text>
+<rect x='990' y='624' width='88' height='22' rx='11' fill='#888' opacity='0.15'/>
+<text x='1034.0' y='639' fill='#888' font-size='11' text-anchor='middle'>Completed</text>
+<rect x='48' y='640' width='400' height='4' rx='2' fill='#e9ecef'/>
+<rect x='48' y='640' width='400' height='4' rx='2' fill='#888'/>
+<rect x='24' y='676' width='1152' height='88' rx='6' fill='#f7f8fa' stroke='#ddd' stroke-width='1'/>
+<text x='38' y='700' fill='#333' font-size='14' font-weight='600'>StartupXYZ</text>
+<text x='38' y='718' fill='#888' font-size='12'>Pilot Campaign</text>
+<text x='1120' y='700' fill='#333' font-size='16' font-weight='bold' text-anchor='end'>$2,500</text>
+<rect x='990' y='724' width='80' height='22' rx='11' fill='#aaa' opacity='0.15'/>
+<text x='1030.0' y='739' fill='#aaa' font-size='11' text-anchor='middle'>Archived</text>
+<rect x='48' y='740' width='400' height='4' rx='2' fill='#e9ecef'/>
+<rect x='48' y='740' width='400' height='4' rx='2' fill='#aaa'/>
+<circle cx='1148' cy='848' r='28' fill='#4A90D9'/>
+<text x='1148' y='854' fill='#fff' font-size='28' text-anchor='middle' font-weight='bold'>+</text>
+</svg>
