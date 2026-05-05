@@ -11,5 +11,5 @@ export async function DELETE(
   _request: Request,
   { params }: { params: { platform: string } }
 ) {
-  return NextResponse.json({ disconnected: params.platform }, { status: 204 });
+  return NextResponse.json({ disconnected: params.platform }, { status: 200 });
 }

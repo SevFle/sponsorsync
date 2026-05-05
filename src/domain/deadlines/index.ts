@@ -38,7 +38,7 @@ export function getUpcomingDeadlines(
         deliverableTitle: d.title,
         dueDate: due,
         daysRemaining,
-        severity: daysRemaining <= 1 ? "critical" : daysRemaining <= 3 ? "warning" : "info",
+        severity: daysRemaining <= 1 ? "critical" as const : daysRemaining <= 3 ? "warning" as const : "info" as const,
       };
     })
     .sort((a, b) => a.daysRemaining - b.daysRemaining);

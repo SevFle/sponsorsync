@@ -4,10 +4,10 @@ export const config = {
     url: process.env.NEXTAUTH_URL ?? "http://localhost:3000",
   },
   database: {
-    url: process.env.DATABASE_URL!,
+    url: process.env.DATABASE_URL ?? "",
   },
   auth: {
-    secret: process.env.NEXTAUTH_SECRET!,
+    secret: process.env.NEXTAUTH_SECRET ?? "",
     url: process.env.NEXTAUTH_URL ?? "http://localhost:3000",
   },
   email: {

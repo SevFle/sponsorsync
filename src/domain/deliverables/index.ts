@@ -24,7 +24,7 @@ export function checkDeliverableStatus(
   const now = new Date();
   const due = new Date(dueDate);
   const daysUntilDue = Math.ceil((due.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
-  if (daysUntilDue < 0) return "overdue";
+  if (daysUntilDue <= 0) return "overdue";
   if (daysUntilDue <= 3) return "at_risk";
   return "on_track";
 }

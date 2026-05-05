@@ -12,12 +12,12 @@ export async function PATCH(
   { params }: { params: { id: string } }
 ) {
   const body = await request.json();
-  return NextResponse.json({ deal: { id: params.id, ...body } });
+  return NextResponse.json({ deal: { ...body, id: params.id } });
 }
 
 export async function DELETE(
   _request: Request,
   { params }: { params: { id: string } }
 ) {
-  return NextResponse.json({ deleted: true }, { status: 204 });
+  return NextResponse.json({ deleted: true }, { status: 200 });
 }

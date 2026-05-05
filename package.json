@@ -49,6 +49,7 @@
     "@testing-library/react": "^16.2.0",
     "@testing-library/jest-dom": "^6.6.3",
     "jsdom": "^26.0.0",
-    "@playwright/test": "^1.51.0"
+    "@playwright/test": "^1.51.0",
+    "wait-on": "^8.0.3"
   }
 }
