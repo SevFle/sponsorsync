@@ -123,6 +123,73 @@ export const SHIPMENT_STATUSES: ShipmentStatus[] = [
   "exception",
 ];
 
+export type NotificationChannel = "email" | "sms" | "both";
+
+export interface NotificationRulePayload {
+  milestoneType: string;
+  channel: NotificationChannel;
+  templateId?: string;
+  enabled?: boolean;
+}
+
+export interface NotificationSettingPayload {
+  emailEnabled?: boolean;
+  smsEnabled?: boolean;
+  defaultFromEmail?: string;
+  defaultFromPhone?: string;
+  replyToEmail?: string;
+  includeTrackingLink?: boolean;
+  trackingBaseUrl?: string;
+  quietHoursStart?: string;
+  quietHoursEnd?: string;
+  quietHoursTimezone?: string;
+  batchSize?: number;
+  retryAttempts?: number;
+  retryDelayMinutes?: number;
+}
+
+export interface NotificationHistoryItem {
+  id: string;
+  shipmentId: string;
+  milestoneId?: string | null;
+  ruleId?: string | null;
+  channel: NotificationChannel;
+  recipient: string;
+  subject?: string | null;
+  status: string;
+  providerId?: string | null;
+  errorMessage?: string | null;
+  sentAt?: string | null;
+  deliveredAt?: string | null;
+  createdAt: string;
+}
+
+export interface NotificationHistoryResponse {
+  success: boolean;
+  data: NotificationHistoryItem[];
+  total: number;
+  page: number;
+  pageSize: number;
+}
+
+export interface NotificationSetting {
+  id: string;
+  tenantId: string;
+  emailEnabled: boolean;
+  smsEnabled: boolean;
+  defaultFromEmail?: string | null;
+  defaultFromPhone?: string | null;
+  replyToEmail?: string | null;
+  includeTrackingLink: boolean;
+  trackingBaseUrl?: string | null;
+  quietHoursStart?: string | null;
+  quietHoursEnd?: string | null;
+  quietHoursTimezone?: string | null;
+  batchSize: number;
+  retryAttempts: number;
+  retryDelayMinutes: number;
+}
+
 export const SORTABLE_COLUMNS = [
   "trackingId",
   "customerName",

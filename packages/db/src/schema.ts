@@ -113,18 +113,53 @@ export const notificationRules = pgTable("notification_rules", {
   templateId: varchar("template_id", { length: 255 }),
   enabled: boolean("enabled").default(true).notNull(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const notificationSettings = pgTable("notification_settings", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  tenantId: uuid("tenant_id")
+    .references(() => tenants.id, { onDelete: "cascade" })
+    .unique()
+    .notNull(),
+  emailEnabled: boolean("email_enabled").default(true).notNull(),
+  smsEnabled: boolean("sms_enabled").default(false).notNull(),
+  defaultFromEmail: varchar("default_from_email", { length: 255 }),
+  defaultFromPhone: varchar("default_from_phone", { length: 20 }),
+  replyToEmail: varchar("reply_to_email", { length: 255 }),
+  includeTrackingLink: boolean("include_tracking_link").default(true).notNull(),
+  trackingBaseUrl: varchar("tracking_base_url", { length: 500 }),
+  quietHoursStart: varchar("quiet_hours_start", { length: 5 }),
+  quietHoursEnd: varchar("quiet_hours_end", { length: 5 }),
+  quietHoursTimezone: varchar("quiet_hours_timezone", { length: 50 }),
+  batchSize: integer("batch_size").default(50).notNull(),
+  retryAttempts: integer("retry_attempts").default(3).notNull(),
+  retryDelayMinutes: integer("retry_delay_minutes").default(5).notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
 
 export const notifications = pgTable("notifications", {
   id: uuid("id").defaultRandom().primaryKey(),
+  tenantId: uuid("tenant_id")
+    .references(() => tenants.id, { onDelete: "cascade" })
+    .notNull(),
   shipmentId: uuid("shipment_id")
     .references(() => shipments.id, { onDelete: "cascade" })
     .notNull(),
+  milestoneId: uuid("milestone_id")
+    .references(() => milestones.id, { onDelete: "set null" }),
+  ruleId: uuid("rule_id")
+    .references(() => notificationRules.id, { onDelete: "set null" }),
   channel: notificationChannelEnum("channel").notNull(),
   recipient: varchar("recipient", { length: 255 }).notNull(),
+  subject: varchar("subject", { length: 500 }),
+  body: text("body"),
   status: varchar("status", { length: 50 }).default("pending").notNull(),
   providerId: varchar("provider_id", { length: 255 }),
+  errorMessage: text("error_message"),
   sentAt: timestamp("sent_at"),
+  deliveredAt: timestamp("delivered_at"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
@@ -132,6 +167,8 @@ export const tenantsRelations = relations(tenants, ({ many }) => ({
   shipments: many(shipments),
   apiKeys: many(apiKeys),
   notificationRules: many(notificationRules),
+  notificationSettings: many(notificationSettings),
+  notifications: many(notifications),
 }));
 
 export const shipmentsRelations = relations(shipments, ({ one, many }) => ({
@@ -164,9 +201,28 @@ export const notificationRulesRelations = relations(notificationRules, ({ one })
   }),
 }));
 
+export const notificationSettingsRelations = relations(notificationSettings, ({ one }) => ({
+  tenant: one(tenants, {
+    fields: [notificationSettings.tenantId],
+    references: [tenants.id],
+  }),
+}));
+
 export const notificationsRelations = relations(notifications, ({ one }) => ({
   shipment: one(shipments, {
     fields: [notifications.shipmentId],
     references: [shipments.id],
+  }),
+  milestone: one(milestones, {
+    fields: [notifications.milestoneId],
+    references: [milestones.id],
+  }),
+  rule: one(notificationRules, {
+    fields: [notifications.ruleId],
+    references: [notificationRules.id],
+  }),
+  tenant: one(tenants, {
+    fields: [notifications.tenantId],
+    references: [tenants.id],
   }),
 }));
