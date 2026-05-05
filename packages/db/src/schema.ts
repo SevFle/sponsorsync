@@ -41,6 +41,12 @@ export const notificationChannelEnum = pgEnum("notification_channel", [
   "both",
 ]);
 
+export const corridorTypeEnum = pgEnum("corridor_type", [
+  "fcl",
+  "ltl",
+  "drayage",
+]);
+
 export const tenants = pgTable("tenants", {
   id: uuid("id").defaultRandom().primaryKey(),
   name: varchar("name", { length: 255 }).notNull(),
@@ -128,10 +134,38 @@ export const notifications = pgTable("notifications", {
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
+export const corridorMilestoneTemplates = pgTable("corridor_milestone_templates", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  corridorType: corridorTypeEnum("corridor_type").notNull(),
+  milestoneKey: varchar("milestone_key", { length: 50 }).notNull(),
+  milestoneLabel: varchar("milestone_label", { length: 255 }).notNull(),
+  description: text("description"),
+  milestoneOrder: integer("milestone_order").notNull(),
+  defaultNotificationEnabled: boolean("default_notification_enabled").default(true).notNull(),
+  estimatedDurationHours: integer("estimated_duration_hours"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const tenantCorridorConfigs = pgTable("tenant_corridor_configs", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  tenantId: uuid("tenant_id")
+    .references(() => tenants.id, { onDelete: "cascade" })
+    .notNull(),
+  corridorType: corridorTypeEnum("corridor_type").notNull(),
+  milestoneTemplateId: uuid("milestone_template_id")
+    .references(() => corridorMilestoneTemplates.id, { onDelete: "cascade" })
+    .notNull(),
+  notificationEnabled: boolean("notification_enabled").default(true).notNull(),
+  isActive: boolean("is_active").default(true).notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
 export const tenantsRelations = relations(tenants, ({ many }) => ({
   shipments: many(shipments),
   apiKeys: many(apiKeys),
   notificationRules: many(notificationRules),
+  tenantCorridorConfigs: many(tenantCorridorConfigs),
 }));
 
 export const shipmentsRelations = relations(shipments, ({ one, many }) => ({
@@ -168,5 +202,20 @@ export const notificationsRelations = relations(notifications, ({ one }) => ({
   shipment: one(shipments, {
     fields: [notifications.shipmentId],
     references: [shipments.id],
+  }),
+}));
+
+export const corridorMilestoneTemplatesRelations = relations(corridorMilestoneTemplates, ({ many }) => ({
+  tenantCorridorConfigs: many(tenantCorridorConfigs),
+}));
+
+export const tenantCorridorConfigsRelations = relations(tenantCorridorConfigs, ({ one }) => ({
+  tenant: one(tenants, {
+    fields: [tenantCorridorConfigs.tenantId],
+    references: [tenants.id],
+  }),
+  milestoneTemplate: one(corridorMilestoneTemplates, {
+    fields: [tenantCorridorConfigs.milestoneTemplateId],
+    references: [corridorMilestoneTemplates.id],
   }),
 }));

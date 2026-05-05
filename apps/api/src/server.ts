@@ -16,6 +16,7 @@ import { notificationRoutes } from "./routes/notifications";
 import { apiKeyRoutes } from "./routes/api-keys";
 import { csvImportRoutes } from "./routes/csv-import";
 import { trackingPageRoutes } from "./routes/tracking-pages";
+import { corridorMilestoneTemplateRoutes } from "./routes/corridor-milestone-templates";
 
 export interface ServerOptions {
   apiKeyResolver?: ApiKeyResolver;
@@ -70,6 +71,7 @@ export async function buildServer(options?: ServerOptions) {
   await server.register(apiKeyRoutes, { prefix: "/api/api-keys" });
   await server.register(csvImportRoutes, { prefix: "/api/csv-import" });
   await server.register(trackingPageRoutes, { prefix: "/api/tracking-pages" });
+  await server.register(corridorMilestoneTemplateRoutes, { prefix: "/api/corridor-milestones" });
 
   return server;
 }
