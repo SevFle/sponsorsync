@@ -5,7 +5,7 @@ describe("GET /api/deals/[id]", () => {
   it("returns deal with matching id", async () => {
     const response = await GetById(
       new Request("http://localhost:3000/api/deals/deal-123"),
-      { params: { id: "deal-123" } }
+      { params: Promise.resolve({ id: "deal-123" }) }
     );
     const body = await response.json();
 
@@ -17,7 +17,7 @@ describe("GET /api/deals/[id]", () => {
     const uuid = "550e8400-e29b-41d4-a716-446655440000";
     const response = await GetById(
       new Request(`http://localhost:3000/api/deals/${uuid}`),
-      { params: { id: uuid } }
+      { params: Promise.resolve({ id: uuid }) }
     );
     const body = await response.json();
 
@@ -34,7 +34,7 @@ describe("PATCH /api/deals/[id]", () => {
       headers: { "Content-Type": "application/json" },
     });
 
-    const response = await PATCH(request, { params: { id: "deal-123" } });
+    const response = await PATCH(request, { params: Promise.resolve({ id: "deal-123" }) });
     const body = await response.json();
 
     expect(response.status).toBe(200);
@@ -48,7 +48,7 @@ describe("PATCH /api/deals/[id]", () => {
       headers: { "Content-Type": "application/json" },
     });
 
-    const response = await PATCH(request, { params: { id: "original-id" } });
+    const response = await PATCH(request, { params: Promise.resolve({ id: "original-id" }) });
     const body = await response.json();
 
     expect(body.deal.id).toBe("original-id");
@@ -59,7 +59,7 @@ describe("DELETE /api/deals/[id]", () => {
   it("returns deleted true with status 200", async () => {
     const response = await DELETE(
       new Request("http://localhost:3000/api/deals/deal-123", { method: "DELETE" }),
-      { params: { id: "deal-123" } }
+      { params: Promise.resolve({ id: "deal-123" }) }
     );
 
     expect(response.status).toBe(200);
