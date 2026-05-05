@@ -207,11 +207,12 @@ describe("apiClient", () => {
     });
 
     const { apiClient: freshClient } = await import("../src/lib/api-client");
-    await freshClient.get("/test");
+    await freshClient.get("/test", { headers: { "X-Custom": "value" } });
 
     const callArgs = (globalThis.fetch as ReturnType<typeof vi.fn>).mock.calls[0];
-    const headers = callArgs[1].headers as Record<string, string>;
-    expect(headers["content-type"]).toBe("application/json");
+    const headers = new Headers(callArgs[1].headers as HeadersInit);
+    expect(headers.get("content-type")).toBe("application/json");
+    expect(headers.get("x-custom")).toBe("value");
   });
 
   it("clears session on 401", async () => {
@@ -226,7 +227,7 @@ describe("apiClient", () => {
     setAuthToken("test-token");
     expect(getAuthToken()).toBe("test-token");
 
-    await freshClient.get("/test").catch(() => {});
+    await expect(freshClient.get("/test")).rejects.toThrow("API error: 401 Unauthorized");
     expect(getAuthToken()).toBeNull();
   });
 });
