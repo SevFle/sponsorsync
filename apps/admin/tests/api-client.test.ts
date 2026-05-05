@@ -19,12 +19,12 @@ describe("apiClient", () => {
   }
 
   function mockFetch(response: { ok: boolean; status: number; statusText: string; json: () => Promise<unknown> }) {
-    return vi.fn().mockResolvedValue(response);
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(response as Response);
   }
 
   it("GET sends request and returns parsed JSON", async () => {
     const data = { success: true, data: [] };
-    globalThis.fetch = mockFetch({
+    mockFetch({
       ok: true,
       status: 200,
       statusText: "OK",
@@ -43,7 +43,7 @@ describe("apiClient", () => {
 
   it("POST sends request with JSON body", async () => {
     const responseBody = { success: true };
-    globalThis.fetch = mockFetch({
+    mockFetch({
       ok: true,
       status: 201,
       statusText: "Created",
@@ -65,7 +65,7 @@ describe("apiClient", () => {
 
   it("PATCH sends request with JSON body", async () => {
     const responseBody = { success: true };
-    globalThis.fetch = mockFetch({
+    mockFetch({
       ok: true,
       status: 200,
       statusText: "OK",
@@ -87,7 +87,7 @@ describe("apiClient", () => {
 
   it("DELETE sends request without body", async () => {
     const responseBody = { success: true };
-    globalThis.fetch = mockFetch({
+    mockFetch({
       ok: true,
       status: 200,
       statusText: "OK",
@@ -105,7 +105,7 @@ describe("apiClient", () => {
   });
 
   it("includes Content-Type header", async () => {
-    globalThis.fetch = mockFetch({
+    mockFetch({
       ok: true,
       status: 200,
       statusText: "OK",
@@ -124,7 +124,7 @@ describe("apiClient", () => {
   });
 
   it("throws on non-ok response", async () => {
-    globalThis.fetch = mockFetch({
+    mockFetch({
       ok: false,
       status: 500,
       statusText: "Internal Server Error",
@@ -136,7 +136,7 @@ describe("apiClient", () => {
   });
 
   it("throws on 404 response", async () => {
-    globalThis.fetch = mockFetch({
+    mockFetch({
       ok: false,
       status: 404,
       statusText: "Not Found",
@@ -148,7 +148,7 @@ describe("apiClient", () => {
   });
 
   it("throws on 401 response", async () => {
-    globalThis.fetch = mockFetch({
+    mockFetch({
       ok: false,
       status: 401,
       statusText: "Unauthorized",
@@ -160,7 +160,7 @@ describe("apiClient", () => {
   });
 
   it("POST without body sends undefined body", async () => {
-    globalThis.fetch = mockFetch({
+    mockFetch({
       ok: true,
       status: 201,
       statusText: "Created",
@@ -182,7 +182,7 @@ describe("apiClient", () => {
     vi.stubEnv("NEXT_PUBLIC_API_URL", "https://api.custom.com");
     vi.resetModules();
 
-    globalThis.fetch = mockFetch({
+    mockFetch({
       ok: true,
       status: 200,
       statusText: "OK",
@@ -199,7 +199,7 @@ describe("apiClient", () => {
   });
 
   it("merges custom headers from options", async () => {
-    globalThis.fetch = mockFetch({
+    mockFetch({
       ok: true,
       status: 200,
       statusText: "OK",
@@ -207,15 +207,16 @@ describe("apiClient", () => {
     });
 
     const { apiClient: freshClient } = await import("../src/lib/api-client");
-    await freshClient.get("/test");
+    await freshClient.get("/test", { headers: { "x-custom-header": "custom-value" } });
 
     const callArgs = (globalThis.fetch as ReturnType<typeof vi.fn>).mock.calls[0];
     const headers = callArgs[1].headers as Record<string, string>;
     expect(headers["content-type"]).toBe("application/json");
+    expect(headers["x-custom-header"]).toBe("custom-value");
   });
 
   it("clears session on 401", async () => {
-    globalThis.fetch = mockFetch({
+    mockFetch({
       ok: false,
       status: 401,
       statusText: "Unauthorized",
