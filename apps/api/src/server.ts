@@ -16,9 +16,17 @@ import { notificationRoutes } from "./routes/notifications";
 import { apiKeyRoutes } from "./routes/api-keys";
 import { csvImportRoutes } from "./routes/csv-import";
 import { trackingPageRoutes } from "./routes/tracking-pages";
+import { NotificationDispatcher } from "./services/notification-dispatcher";
+
+declare module "fastify" {
+  interface FastifyInstance {
+    notificationDispatcher: NotificationDispatcher;
+  }
+}
 
 export interface ServerOptions {
   apiKeyResolver?: ApiKeyResolver;
+  notificationDispatcher?: import("./services/notification-dispatcher").NotificationDispatcher;
 }
 
 export function validateEnvironment(): void {
@@ -61,6 +69,11 @@ export async function buildServer(options?: ServerOptions) {
   });
   await server.register(csrfPlugin);
   await server.register(tenantResolverPlugin);
+
+  server.decorate(
+    "notificationDispatcher",
+    options?.notificationDispatcher ?? new NotificationDispatcher()
+  );
 
   await server.register(healthRoutes, { prefix: "/api" });
   await server.register(shipmentRoutes, { prefix: "/api/shipments" });
