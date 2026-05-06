@@ -2,7 +2,8 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 
 const mocks = vi.hoisted(() => {
   const selectWhere = vi.fn();
-  const selectFrom = vi.fn(() => ({ where: selectWhere }));
+  const selectInnerJoin = vi.fn(() => ({ where: selectWhere }));
+  const selectFrom = vi.fn(() => ({ where: selectWhere, innerJoin: selectInnerJoin }));
   const select = vi.fn(() => ({ from: selectFrom }));
 
   const insertReturning = vi.fn();
@@ -19,7 +20,7 @@ const mocks = vi.hoisted(() => {
   const deleteFn = vi.fn(() => ({ where: deleteWhere }));
 
   return {
-    select, selectFrom, selectWhere,
+    select, selectFrom, selectWhere, selectInnerJoin,
     insert, insertValues, insertReturning,
     update, updateSet, updateWhere, updateReturning,
     deleteFn, deleteWhere, deleteReturning,
@@ -49,10 +50,15 @@ vi.mock("@/lib/db/schema", () => ({
     createdAt: "created_at",
     updatedAt: "updated_at",
   },
+  deals: {
+    id: "id",
+    userId: "user_id",
+  },
 }));
 
 vi.mock("drizzle-orm", () => ({
   eq: vi.fn((col, val) => ({ col, val })),
+  and: vi.fn((...args) => args),
 }));
 
 import {
@@ -107,16 +113,22 @@ describe("getDeliverablesByDealId", () => {
 });
 
 describe("getDeliverableById", () => {
-  it("returns deliverable when found", async () => {
+  it("returns deliverable when found with user scoping", async () => {
     mocks.selectWhere.mockResolvedValue([sampleDeliverable]);
-    const result = await getDeliverableById("deliv-1");
+    const result = await getDeliverableById("deliv-1", "user-1");
     expect(result).toEqual(sampleDeliverable);
   });
 
   it("returns undefined when not found", async () => {
     mocks.selectWhere.mockResolvedValue([]);
-    const result = await getDeliverableById("nonexistent");
+    const result = await getDeliverableById("nonexistent", "user-1");
     expect(result).toBeUndefined();
+  });
+
+  it("calls innerJoin for ownership check", async () => {
+    mocks.selectWhere.mockResolvedValue([sampleDeliverable]);
+    await getDeliverableById("deliv-1", "user-1");
+    expect(mocks.selectInnerJoin).toHaveBeenCalled();
   });
 });
 
@@ -138,32 +150,52 @@ describe("createDeliverable", () => {
 });
 
 describe("updateDeliverable", () => {
-  it("updates and returns the deliverable", async () => {
+  it("updates and returns the deliverable when owned by user", async () => {
+    mocks.selectWhere.mockResolvedValue([{ id: "deliv-1" }]);
     const updated = { ...sampleDeliverable, status: "in_progress" as const };
     mocks.updateReturning.mockResolvedValue([updated]);
-    const result = await updateDeliverable("deliv-1", { status: "in_progress" });
+    const result = await updateDeliverable("deliv-1", { status: "in_progress" }, "user-1");
     expect(result).toEqual(updated);
     expect(mocks.updateSet).toHaveBeenCalledWith({ status: "in_progress" });
   });
 
-  it("returns undefined when deliverable not found", async () => {
-    mocks.updateReturning.mockResolvedValue([]);
-    const result = await updateDeliverable("nonexistent", { title: "X" });
+  it("returns undefined when deliverable not found for user", async () => {
+    mocks.selectWhere.mockResolvedValue([]);
+    const result = await updateDeliverable("nonexistent", { title: "X" }, "user-1");
     expect(result).toBeUndefined();
+    expect(mocks.update).not.toHaveBeenCalled();
+  });
+
+  it("performs ownership check before update", async () => {
+    mocks.selectWhere.mockResolvedValue([{ id: "deliv-1" }]);
+    mocks.updateReturning.mockResolvedValue([sampleDeliverable]);
+    await updateDeliverable("deliv-1", { title: "New" }, "user-1");
+    expect(mocks.selectInnerJoin).toHaveBeenCalled();
+    expect(mocks.update).toHaveBeenCalled();
   });
 });
 
 describe("deleteDeliverable", () => {
-  it("deletes and returns the deliverable", async () => {
+  it("deletes and returns the deliverable when owned by user", async () => {
+    mocks.selectWhere.mockResolvedValue([{ id: "deliv-1" }]);
     mocks.deleteReturning.mockResolvedValue([sampleDeliverable]);
-    const result = await deleteDeliverable("deliv-1");
+    const result = await deleteDeliverable("deliv-1", "user-1");
     expect(result).toEqual(sampleDeliverable);
     expect(mocks.deleteFn).toHaveBeenCalled();
   });
 
-  it("returns undefined when deliverable not found", async () => {
-    mocks.deleteReturning.mockResolvedValue([]);
-    const result = await deleteDeliverable("nonexistent");
+  it("returns undefined when deliverable not found for user", async () => {
+    mocks.selectWhere.mockResolvedValue([]);
+    const result = await deleteDeliverable("nonexistent", "user-1");
     expect(result).toBeUndefined();
+    expect(mocks.deleteFn).not.toHaveBeenCalled();
+  });
+
+  it("performs ownership check before delete", async () => {
+    mocks.selectWhere.mockResolvedValue([{ id: "deliv-1" }]);
+    mocks.deleteReturning.mockResolvedValue([sampleDeliverable]);
+    await deleteDeliverable("deliv-1", "user-1");
+    expect(mocks.selectInnerJoin).toHaveBeenCalled();
+    expect(mocks.deleteFn).toHaveBeenCalled();
   });
 });

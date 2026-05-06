@@ -51,6 +51,7 @@ vi.mock("@/lib/db/schema", () => ({
 
 vi.mock("drizzle-orm", () => ({
   eq: vi.fn((col, val) => ({ col, val })),
+  and: vi.fn((...args) => args),
 }));
 
 import {
@@ -103,15 +104,21 @@ describe("getSponsorsByUserId", () => {
 });
 
 describe("getSponsorById", () => {
-  it("returns sponsor when found", async () => {
+  it("returns sponsor when found with user scoping", async () => {
     mocks.selectWhere.mockResolvedValue([sampleSponsor]);
-    const result = await getSponsorById("sponsor-1");
+    const result = await getSponsorById("sponsor-1", "user-1");
     expect(result).toEqual(sampleSponsor);
   });
 
   it("returns undefined when not found", async () => {
     mocks.selectWhere.mockResolvedValue([]);
-    const result = await getSponsorById("nonexistent");
+    const result = await getSponsorById("nonexistent", "user-1");
+    expect(result).toBeUndefined();
+  });
+
+  it("returns undefined when sponsor belongs to different user", async () => {
+    mocks.selectWhere.mockResolvedValue([]);
+    const result = await getSponsorById("sponsor-1", "different-user");
     expect(result).toBeUndefined();
   });
 });
@@ -149,39 +156,39 @@ describe("createSponsor", () => {
 });
 
 describe("updateSponsor", () => {
-  it("updates and returns the sponsor", async () => {
+  it("updates and returns the sponsor scoped to user", async () => {
     const updated = { ...sampleSponsor, name: "Updated Corp" };
     mocks.updateReturning.mockResolvedValue([updated]);
-    const result = await updateSponsor("sponsor-1", { name: "Updated Corp" });
+    const result = await updateSponsor("sponsor-1", { name: "Updated Corp" }, "user-1");
     expect(result).toEqual(updated);
     expect(mocks.updateSet).toHaveBeenCalledWith({ name: "Updated Corp" });
   });
 
-  it("returns undefined when sponsor not found", async () => {
+  it("returns undefined when sponsor not found for user", async () => {
     mocks.updateReturning.mockResolvedValue([]);
-    const result = await updateSponsor("nonexistent", { name: "X" });
+    const result = await updateSponsor("nonexistent", { name: "X" }, "user-1");
     expect(result).toBeUndefined();
   });
 
   it("handles updating email field", async () => {
     const updated = { ...sampleSponsor, email: "new@acme.com" };
     mocks.updateReturning.mockResolvedValue([updated]);
-    const result = await updateSponsor("sponsor-1", { email: "new@acme.com" });
+    const result = await updateSponsor("sponsor-1", { email: "new@acme.com" }, "user-1");
     expect(result?.email).toBe("new@acme.com");
   });
 });
 
 describe("deleteSponsor", () => {
-  it("deletes and returns the sponsor", async () => {
+  it("deletes and returns the sponsor scoped to user", async () => {
     mocks.deleteReturning.mockResolvedValue([sampleSponsor]);
-    const result = await deleteSponsor("sponsor-1");
+    const result = await deleteSponsor("sponsor-1", "user-1");
     expect(result).toEqual(sampleSponsor);
     expect(mocks.deleteFn).toHaveBeenCalled();
   });
 
-  it("returns undefined when sponsor not found", async () => {
+  it("returns undefined when sponsor not found for user", async () => {
     mocks.deleteReturning.mockResolvedValue([]);
-    const result = await deleteSponsor("nonexistent");
+    const result = await deleteSponsor("nonexistent", "user-1");
     expect(result).toBeUndefined();
   });
 });

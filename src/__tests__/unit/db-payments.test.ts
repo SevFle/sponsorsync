@@ -2,7 +2,8 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 
 const mocks = vi.hoisted(() => {
   const selectWhere = vi.fn();
-  const selectFrom = vi.fn(() => ({ where: selectWhere }));
+  const selectInnerJoin = vi.fn(() => ({ where: selectWhere }));
+  const selectFrom = vi.fn(() => ({ where: selectWhere, innerJoin: selectInnerJoin }));
   const select = vi.fn(() => ({ from: selectFrom }));
 
   const insertReturning = vi.fn();
@@ -19,7 +20,7 @@ const mocks = vi.hoisted(() => {
   const deleteFn = vi.fn(() => ({ where: deleteWhere }));
 
   return {
-    select, selectFrom, selectWhere,
+    select, selectFrom, selectWhere, selectInnerJoin,
     insert, insertValues, insertReturning,
     update, updateSet, updateWhere, updateReturning,
     deleteFn, deleteWhere, deleteReturning,
@@ -49,10 +50,15 @@ vi.mock("@/lib/db/schema", () => ({
     createdAt: "created_at",
     updatedAt: "updated_at",
   },
+  deals: {
+    id: "id",
+    userId: "user_id",
+  },
 }));
 
 vi.mock("drizzle-orm", () => ({
   eq: vi.fn((col, val) => ({ col, val })),
+  and: vi.fn((...args) => args),
 }));
 
 import {
@@ -104,16 +110,22 @@ describe("getPaymentsByDealId", () => {
 });
 
 describe("getPaymentById", () => {
-  it("returns payment when found", async () => {
+  it("returns payment when found with user scoping", async () => {
     mocks.selectWhere.mockResolvedValue([samplePayment]);
-    const result = await getPaymentById("pay-1");
+    const result = await getPaymentById("pay-1", "user-1");
     expect(result).toEqual(samplePayment);
   });
 
   it("returns undefined when not found", async () => {
     mocks.selectWhere.mockResolvedValue([]);
-    const result = await getPaymentById("nonexistent");
+    const result = await getPaymentById("nonexistent", "user-1");
     expect(result).toBeUndefined();
+  });
+
+  it("calls innerJoin for ownership check", async () => {
+    mocks.selectWhere.mockResolvedValue([samplePayment]);
+    await getPaymentById("pay-1", "user-1");
+    expect(mocks.selectInnerJoin).toHaveBeenCalled();
   });
 });
 
@@ -135,40 +147,61 @@ describe("createPayment", () => {
 });
 
 describe("updatePayment", () => {
-  it("updates and returns the payment", async () => {
+  it("updates and returns the payment when owned by user", async () => {
+    mocks.selectWhere.mockResolvedValue([{ id: "pay-1" }]);
     const updated = { ...samplePayment, status: "paid" as const };
     mocks.updateReturning.mockResolvedValue([updated]);
-    const result = await updatePayment("pay-1", { status: "paid" });
+    const result = await updatePayment("pay-1", { status: "paid" }, "user-1");
     expect(result).toEqual(updated);
     expect(mocks.updateSet).toHaveBeenCalledWith({ status: "paid" });
   });
 
-  it("returns undefined when payment not found", async () => {
-    mocks.updateReturning.mockResolvedValue([]);
-    const result = await updatePayment("nonexistent", { amount: 100 });
+  it("returns undefined when payment not found for user", async () => {
+    mocks.selectWhere.mockResolvedValue([]);
+    const result = await updatePayment("nonexistent", { amount: 100 }, "user-1");
     expect(result).toBeUndefined();
+    expect(mocks.update).not.toHaveBeenCalled();
   });
 
   it("updates paidDate when marking as paid", async () => {
+    mocks.selectWhere.mockResolvedValue([{ id: "pay-1" }]);
     const updated = { ...samplePayment, status: "paid" as const, paidDate: "2025-05-01" };
     mocks.updateReturning.mockResolvedValue([updated]);
-    const result = await updatePayment("pay-1", { status: "paid", paidDate: "2025-05-01" });
+    const result = await updatePayment("pay-1", { status: "paid", paidDate: "2025-05-01" }, "user-1");
     expect(result?.status).toBe("paid");
     expect(result?.paidDate).toBe("2025-05-01");
+  });
+
+  it("performs ownership check before update", async () => {
+    mocks.selectWhere.mockResolvedValue([{ id: "pay-1" }]);
+    mocks.updateReturning.mockResolvedValue([samplePayment]);
+    await updatePayment("pay-1", { status: "paid" }, "user-1");
+    expect(mocks.selectInnerJoin).toHaveBeenCalled();
+    expect(mocks.update).toHaveBeenCalled();
   });
 });
 
 describe("deletePayment", () => {
-  it("deletes and returns the payment", async () => {
+  it("deletes and returns the payment when owned by user", async () => {
+    mocks.selectWhere.mockResolvedValue([{ id: "pay-1" }]);
     mocks.deleteReturning.mockResolvedValue([samplePayment]);
-    const result = await deletePayment("pay-1");
+    const result = await deletePayment("pay-1", "user-1");
     expect(result).toEqual(samplePayment);
     expect(mocks.deleteFn).toHaveBeenCalled();
   });
 
-  it("returns undefined when payment not found", async () => {
-    mocks.deleteReturning.mockResolvedValue([]);
-    const result = await deletePayment("nonexistent");
+  it("returns undefined when payment not found for user", async () => {
+    mocks.selectWhere.mockResolvedValue([]);
+    const result = await deletePayment("nonexistent", "user-1");
     expect(result).toBeUndefined();
+    expect(mocks.deleteFn).not.toHaveBeenCalled();
+  });
+
+  it("performs ownership check before delete", async () => {
+    mocks.selectWhere.mockResolvedValue([{ id: "pay-1" }]);
+    mocks.deleteReturning.mockResolvedValue([samplePayment]);
+    await deletePayment("pay-1", "user-1");
+    expect(mocks.selectInnerJoin).toHaveBeenCalled();
+    expect(mocks.deleteFn).toHaveBeenCalled();
   });
 });

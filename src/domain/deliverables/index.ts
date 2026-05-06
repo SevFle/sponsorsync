@@ -7,7 +7,18 @@ export const createDeliverableSchema = z.object({
   dueDate: z.string().date().optional(),
 });
 
+export const updateDeliverableSchema = z.object({
+  dealId: z.string().uuid().optional(),
+  title: z.string().min(1).max(255).optional(),
+  description: z.string().optional(),
+  status: z.enum(["pending", "in_progress", "submitted", "verified", "missed"]).optional(),
+  dueDate: z.string().date().optional(),
+  completedDate: z.string().date().nullable().optional(),
+  notes: z.string().optional(),
+});
+
 export type CreateDeliverableInput = z.infer<typeof createDeliverableSchema>;
+export type UpdateDeliverableInput = z.infer<typeof updateDeliverableSchema>;
 
 export type VerificationResult = {
   verified: boolean;
