@@ -108,7 +108,7 @@ describe("GET /api/integrations/[platform]", () => {
   it("returns platform with disconnected status", async () => {
     const response = await GetPlatform(
       new Request("http://localhost:3000/api/integrations/buzzsprout"),
-      { params: { platform: "buzzsprout" } }
+      { params: Promise.resolve({ platform: "buzzsprout" }) }
     );
     const body = await response.json();
 
@@ -122,7 +122,7 @@ describe("GET /api/integrations/[platform]", () => {
     for (const platform of platforms) {
       const response = await GetPlatform(
         new Request(`http://localhost:3000/api/integrations/${platform}`),
-        { params: { platform } }
+        { params: Promise.resolve({ platform }) }
       );
       const body = await response.json();
 
@@ -136,7 +136,7 @@ describe("DELETE /api/integrations/[platform]", () => {
   it("returns disconnected platform with status 200", async () => {
     const response = await Disconnect(
       new Request("http://localhost:3000/api/integrations/buzzsprout", { method: "DELETE" }),
-      { params: { platform: "buzzsprout" } }
+      { params: Promise.resolve({ platform: "buzzsprout" }) }
     );
 
     expect(response.status).toBe(200);

@@ -5,7 +5,7 @@ describe("GET /api/ical/[token]", () => {
   it("returns valid iCalendar content", async () => {
     const response = await GET(
       new Request("http://localhost:3000/api/ical/abc123"),
-      { params: { token: "abc123" } }
+      { params: Promise.resolve({ token: "abc123" }) }
     );
 
     expect(response.status).toBe(200);
@@ -19,7 +19,7 @@ describe("GET /api/ical/[token]", () => {
   it("includes correct PRODID", async () => {
     const response = await GET(
       new Request("http://localhost:3000/api/ical/test-token"),
-      { params: { token: "test-token" } }
+      { params: Promise.resolve({ token: "test-token" }) }
     );
     const text = await response.text();
 
@@ -29,7 +29,7 @@ describe("GET /api/ical/[token]", () => {
   it("includes token in VEVENT UID", async () => {
     const response = await GET(
       new Request("http://localhost:3000/api/ical/my-token"),
-      { params: { token: "my-token" } }
+      { params: Promise.resolve({ token: "my-token" }) }
     );
     const text = await response.text();
 
@@ -39,7 +39,7 @@ describe("GET /api/ical/[token]", () => {
   it("includes VEVENT structure", async () => {
     const response = await GET(
       new Request("http://localhost:3000/api/ical/tok"),
-      { params: { token: "tok" } }
+      { params: Promise.resolve({ token: "tok" }) }
     );
     const text = await response.text();
 
@@ -52,7 +52,7 @@ describe("GET /api/ical/[token]", () => {
   it("sets correct Content-Type header", async () => {
     const response = await GET(
       new Request("http://localhost:3000/api/ical/tok"),
-      { params: { token: "tok" } }
+      { params: Promise.resolve({ token: "tok" }) }
     );
 
     expect(response.headers.get("Content-Type")).toBe("text/calendar; charset=utf-8");
@@ -61,7 +61,7 @@ describe("GET /api/ical/[token]", () => {
   it("sets Content-Disposition header with filename including token", async () => {
     const response = await GET(
       new Request("http://localhost:3000/api/ical/abc-def"),
-      { params: { token: "abc-def" } }
+      { params: Promise.resolve({ token: "abc-def" }) }
     );
 
     const disposition = response.headers.get("Content-Disposition");
@@ -71,7 +71,7 @@ describe("GET /api/ical/[token]", () => {
   it("uses CRLF line endings per iCal spec", async () => {
     const response = await GET(
       new Request("http://localhost:3000/api/ical/tok"),
-      { params: { token: "tok" } }
+      { params: Promise.resolve({ token: "tok" }) }
     );
     const text = await response.text();
 
@@ -81,7 +81,7 @@ describe("GET /api/ical/[token]", () => {
   it("handles special characters in token", async () => {
     const response = await GET(
       new Request("http://localhost:3000/api/ical/user-123_abc"),
-      { params: { token: "user-123_abc" } }
+      { params: Promise.resolve({ token: "user-123_abc" }) }
     );
     const text = await response.text();
 

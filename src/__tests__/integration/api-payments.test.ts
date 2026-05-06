@@ -58,7 +58,7 @@ describe("GET /api/payments/[id]", () => {
   it("returns payment with matching id", async () => {
     const response = await GetById(
       new Request("http://localhost:3000/api/payments/pay-123"),
-      { params: { id: "pay-123" } }
+      { params: Promise.resolve({ id: "pay-123" }) }
     );
     const body = await response.json();
 
@@ -76,7 +76,7 @@ describe("PATCH /api/payments/[id]", () => {
       headers: { "Content-Type": "application/json" },
     });
 
-    const response = await PATCH(request, { params: { id: "pay-123" } });
+    const response = await PATCH(request, { params: Promise.resolve({ id: "pay-123" }) });
     const body = await response.json();
 
     expect(response.status).toBe(200);
@@ -88,7 +88,7 @@ describe("DELETE /api/payments/[id]", () => {
   it("returns deleted true with status 200", async () => {
     const response = await DELETE(
       new Request("http://localhost:3000/api/payments/pay-123", { method: "DELETE" }),
-      { params: { id: "pay-123" } }
+      { params: Promise.resolve({ id: "pay-123" }) }
     );
 
     expect(response.status).toBe(200);

@@ -38,7 +38,7 @@ describe("GET /api/templates/[id]", () => {
   it("returns template with matching id", async () => {
     const response = await GetById(
       new Request("http://localhost:3000/api/templates/tmpl-789"),
-      { params: { id: "tmpl-789" } }
+      { params: Promise.resolve({ id: "tmpl-789" }) }
     );
     const body = await response.json();
 
@@ -56,7 +56,7 @@ describe("PATCH /api/templates/[id]", () => {
       headers: { "Content-Type": "application/json" },
     });
 
-    const response = await PATCH(request, { params: { id: "tmpl-789" } });
+    const response = await PATCH(request, { params: Promise.resolve({ id: "tmpl-789" }) });
     const body = await response.json();
 
     expect(response.status).toBe(200);
@@ -68,7 +68,7 @@ describe("DELETE /api/templates/[id]", () => {
   it("returns deleted true with status 200", async () => {
     const response = await DELETE(
       new Request("http://localhost:3000/api/templates/tmpl-789", { method: "DELETE" }),
-      { params: { id: "tmpl-789" } }
+      { params: Promise.resolve({ id: "tmpl-789" }) }
     );
 
     expect(response.status).toBe(200);

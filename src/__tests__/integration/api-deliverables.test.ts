@@ -56,7 +56,7 @@ describe("GET /api/deliverables/[id]", () => {
   it("returns deliverable with matching id", async () => {
     const response = await GetById(
       new Request("http://localhost:3000/api/deliverables/del-456"),
-      { params: { id: "del-456" } }
+      { params: Promise.resolve({ id: "del-456" }) }
     );
     const body = await response.json();
 
@@ -74,7 +74,7 @@ describe("PATCH /api/deliverables/[id]", () => {
       headers: { "Content-Type": "application/json" },
     });
 
-    const response = await PATCH(request, { params: { id: "del-456" } });
+    const response = await PATCH(request, { params: Promise.resolve({ id: "del-456" }) });
     const body = await response.json();
 
     expect(response.status).toBe(200);
@@ -86,7 +86,7 @@ describe("DELETE /api/deliverables/[id]", () => {
   it("returns deleted true with status 200", async () => {
     const response = await DELETE(
       new Request("http://localhost:3000/api/deliverables/del-456", { method: "DELETE" }),
-      { params: { id: "del-456" } }
+      { params: Promise.resolve({ id: "del-456" }) }
     );
 
     expect(response.status).toBe(200);
