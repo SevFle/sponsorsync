@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import {
   inngest,
   deadlineReminderFunction,
@@ -36,6 +36,29 @@ describe("deadlineReminderFunction", () => {
     const opts = (deadlineReminderFunction as any).opts;
     expect(opts).toBeDefined();
   });
+
+  it("step.run callback returns checked true", async () => {
+    const handler = (deadlineReminderFunction as any).fn;
+    const stepRunResult = await handler({
+      step: {
+        run: vi.fn((_name: string, fn: () => Promise<any>) => fn()),
+      },
+      event: {},
+    });
+    expect(stepRunResult).toBeDefined();
+  });
+
+  it("step.run 'check-upcoming-deadlines' resolves correctly", async () => {
+    const stepRunMock = vi.fn((_name: string, fn: () => Promise<any>) => fn());
+    const handler = (deadlineReminderFunction as any).fn;
+    await handler({ step: { run: stepRunMock }, event: {} });
+    expect(stepRunMock).toHaveBeenCalledWith(
+      "check-upcoming-deadlines",
+      expect.any(Function)
+    );
+    const result = await stepRunMock.mock.calls[0][1]();
+    expect(result).toEqual({ checked: true });
+  });
 });
 
 describe("deliverableVerificationFunction", () => {
@@ -50,5 +73,28 @@ describe("deliverableVerificationFunction", () => {
   it("has cron trigger configured", () => {
     const opts = (deliverableVerificationFunction as any).opts;
     expect(opts).toBeDefined();
+  });
+
+  it("step.run callback returns verified true", async () => {
+    const handler = (deliverableVerificationFunction as any).fn;
+    const stepRunResult = await handler({
+      step: {
+        run: vi.fn((_name: string, fn: () => Promise<any>) => fn()),
+      },
+      event: {},
+    });
+    expect(stepRunResult).toBeDefined();
+  });
+
+  it("step.run 'verify-deliverables' resolves correctly", async () => {
+    const stepRunMock = vi.fn((_name: string, fn: () => Promise<any>) => fn());
+    const handler = (deliverableVerificationFunction as any).fn;
+    await handler({ step: { run: stepRunMock }, event: {} });
+    expect(stepRunMock).toHaveBeenCalledWith(
+      "verify-deliverables",
+      expect.any(Function)
+    );
+    const result = await stepRunMock.mock.calls[0][1]();
+    expect(result).toEqual({ verified: true });
   });
 });

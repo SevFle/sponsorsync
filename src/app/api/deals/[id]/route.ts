@@ -3,7 +3,9 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth/config";
 import { updateDealSchema } from "@/domain/deals";
 import { getDealById, updateDeal, deleteDeal } from "@/lib/db/queries/deals";
-import { ZodError } from "zod";
+import { z } from "zod";
+
+const idParamSchema = z.string().uuid();
 
 export async function GET(
   _request: Request,
@@ -15,7 +17,16 @@ export async function GET(
   }
 
   const { id } = await params;
-  const deal = await getDealById(id);
+  const idResult = idParamSchema.safeParse(id);
+  if (!idResult.success) {
+    return NextResponse.json(
+      { error: "Invalid id parameter", details: idResult.error.flatten() },
+      { status: 400 }
+    );
+  }
+
+  const userId = session.user.id;
+  const deal = await getDealById(id, userId);
   if (!deal) {
     return NextResponse.json({ error: "Deal not found" }, { status: 404 });
   }
@@ -32,6 +43,14 @@ export async function PATCH(
   }
 
   const { id } = await params;
+  const idResult = idParamSchema.safeParse(id);
+  if (!idResult.success) {
+    return NextResponse.json(
+      { error: "Invalid id parameter", details: idResult.error.flatten() },
+      { status: 400 }
+    );
+  }
+
   let body: unknown;
   try {
     body = await request.json();
@@ -47,7 +66,8 @@ export async function PATCH(
     );
   }
 
-  const deal = await updateDeal(id, parsed.data);
+  const userId = session.user.id;
+  const deal = await updateDeal(id, parsed.data, userId);
   if (!deal) {
     return NextResponse.json({ error: "Deal not found" }, { status: 404 });
   }
@@ -64,7 +84,16 @@ export async function DELETE(
   }
 
   const { id } = await params;
-  const deal = await deleteDeal(id);
+  const idResult = idParamSchema.safeParse(id);
+  if (!idResult.success) {
+    return NextResponse.json(
+      { error: "Invalid id parameter", details: idResult.error.flatten() },
+      { status: 400 }
+    );
+  }
+
+  const userId = session.user.id;
+  const deal = await deleteDeal(id, userId);
   if (!deal) {
     return NextResponse.json({ error: "Deal not found" }, { status: 404 });
   }
