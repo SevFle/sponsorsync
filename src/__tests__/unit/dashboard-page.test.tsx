@@ -112,17 +112,45 @@ beforeEach(() => {
   vi.restoreAllMocks();
 });
 
-function mockFetchResponses(responses: Record<string, unknown>) {
+function buildDashboardResponse(overrides: Partial<{
+  deals: typeof mockDeals;
+  deliverables: typeof mockDeliverables;
+  payments: typeof mockPayments;
+  metrics: Record<string, number>;
+}> = {}) {
+  const deals = overrides.deals ?? [];
+  const deliverables = overrides.deliverables ?? [];
+  const payments = overrides.payments ?? [];
+
+  const metrics = overrides.metrics ?? {
+    activeDeals: deals.filter((d) => d.status === "active").length,
+    draftDeals: deals.filter((d) => d.status === "draft").length,
+    completedDeals: deals.filter((d) => d.status === "completed").length,
+    revenueMtd: payments
+      .filter((p) => p.status === "paid" && p.paidDate)
+      .reduce((sum, p) => sum + p.amount, 0),
+    pendingDeliverables: deliverables.filter(
+      (d) => d.status === "pending" || d.status === "in_progress"
+    ).length,
+    overduePayments: payments.filter(
+      (p) =>
+        p.status === "overdue" ||
+        (p.status === "pending" && p.dueDate && new Date(p.dueDate) < new Date())
+    ).length,
+  };
+
+  return { deals, deliverables, payments, metrics };
+}
+
+function mockDashboardFetch(data: ReturnType<typeof buildDashboardResponse>) {
   vi.spyOn(globalThis, "fetch").mockImplementation((url: string | URL | Request) => {
     const path = typeof url === "string" ? url : url.toString();
-    for (const [key, data] of Object.entries(responses)) {
-      if (path.includes(key)) {
-        return Promise.resolve({
-          ok: true,
-          status: 200,
-          json: () => Promise.resolve(data),
-        } as Response);
-      }
+    if (path.includes("/api/dashboard")) {
+      return Promise.resolve({
+        ok: true,
+        status: 200,
+        json: () => Promise.resolve(data),
+      } as Response);
     }
     return Promise.resolve({
       ok: false,
@@ -134,8 +162,6 @@ function mockFetchResponses(responses: Record<string, unknown>) {
 
 function mockFetchError() {
   vi.spyOn(globalThis, "fetch").mockRejectedValueOnce(new Error("Network error"));
-  vi.spyOn(globalThis, "fetch").mockRejectedValueOnce(new Error("Network error"));
-  vi.spyOn(globalThis, "fetch").mockRejectedValueOnce(new Error("Network error"));
 }
 
 function mockFetchNonOk() {
@@ -143,7 +169,8 @@ function mockFetchNonOk() {
     Promise.resolve({
       ok: false,
       status: 500,
-      json: () => Promise.resolve({}),
+      statusText: "Internal Server Error",
+      json: () => Promise.resolve({ error: "Failed to load dashboard data" }),
     } as Response)
   );
 }
@@ -157,11 +184,11 @@ describe("DashboardPage", () => {
   });
 
   it("renders all metric cards with correct values", async () => {
-    mockFetchResponses({
-      deals: { deals: mockDeals },
-      deliverables: { deliverables: mockDeliverables },
-      payments: { payments: mockPayments },
-    });
+    mockDashboardFetch(buildDashboardResponse({
+      deals: mockDeals,
+      deliverables: mockDeliverables,
+      payments: mockPayments,
+    }));
 
     render(<DashboardPage />);
 
@@ -177,11 +204,11 @@ describe("DashboardPage", () => {
   });
 
   it("computes active deals count correctly", async () => {
-    mockFetchResponses({
-      deals: { deals: mockDeals },
-      deliverables: { deliverables: [] },
-      payments: { payments: [] },
-    });
+    mockDashboardFetch(buildDashboardResponse({
+      deals: mockDeals,
+      deliverables: [],
+      payments: [],
+    }));
 
     render(<DashboardPage />);
 
@@ -194,11 +221,11 @@ describe("DashboardPage", () => {
   });
 
   it("computes revenue MTD from paid payments", async () => {
-    mockFetchResponses({
-      deals: { deals: [] },
-      deliverables: { deliverables: [] },
-      payments: { payments: mockPayments },
-    });
+    mockDashboardFetch(buildDashboardResponse({
+      deals: [],
+      deliverables: [],
+      payments: mockPayments,
+    }));
 
     render(<DashboardPage />);
 
@@ -210,11 +237,11 @@ describe("DashboardPage", () => {
   });
 
   it("computes overdue payments count", async () => {
-    mockFetchResponses({
-      deals: { deals: [] },
-      deliverables: { deliverables: [] },
-      payments: { payments: mockPayments },
-    });
+    mockDashboardFetch(buildDashboardResponse({
+      deals: [],
+      deliverables: [],
+      payments: mockPayments,
+    }));
 
     render(<DashboardPage />);
 
@@ -226,11 +253,11 @@ describe("DashboardPage", () => {
   });
 
   it("renders upcoming deadlines section", async () => {
-    mockFetchResponses({
-      deals: { deals: mockDeals },
-      deliverables: { deliverables: mockDeliverables },
-      payments: { payments: [] },
-    });
+    mockDashboardFetch(buildDashboardResponse({
+      deals: mockDeals,
+      deliverables: mockDeliverables,
+      payments: [],
+    }));
 
     render(<DashboardPage />);
 
@@ -243,11 +270,11 @@ describe("DashboardPage", () => {
   });
 
   it("excludes verified and missed deliverables from upcoming", async () => {
-    mockFetchResponses({
-      deals: { deals: [] },
-      deliverables: { deliverables: mockDeliverables },
-      payments: { payments: [] },
-    });
+    mockDashboardFetch(buildDashboardResponse({
+      deals: [],
+      deliverables: mockDeliverables,
+      payments: [],
+    }));
 
     render(<DashboardPage />);
 
@@ -259,11 +286,11 @@ describe("DashboardPage", () => {
   });
 
   it("renders recent activity from payments", async () => {
-    mockFetchResponses({
-      deals: { deals: [] },
-      deliverables: { deliverables: [] },
-      payments: { payments: mockPayments },
-    });
+    mockDashboardFetch(buildDashboardResponse({
+      deals: [],
+      deliverables: [],
+      payments: mockPayments,
+    }));
 
     render(<DashboardPage />);
 
@@ -277,11 +304,11 @@ describe("DashboardPage", () => {
   });
 
   it("renders deal pipeline summary cards", async () => {
-    mockFetchResponses({
-      deals: { deals: mockDeals },
-      deliverables: { deliverables: [] },
-      payments: { payments: [] },
-    });
+    mockDashboardFetch(buildDashboardResponse({
+      deals: mockDeals,
+      deliverables: [],
+      payments: [],
+    }));
 
     render(<DashboardPage />);
 
@@ -295,11 +322,7 @@ describe("DashboardPage", () => {
   });
 
   it("renders quick action links", async () => {
-    mockFetchResponses({
-      deals: { deals: [] },
-      deliverables: { deliverables: [] },
-      payments: { payments: [] },
-    });
+    mockDashboardFetch(buildDashboardResponse());
 
     render(<DashboardPage />);
 
@@ -340,11 +363,11 @@ describe("DashboardPage", () => {
   it("retries fetching when Try again is clicked", async () => {
     mockFetchError();
 
-    mockFetchResponses({
-      deals: { deals: mockDeals },
-      deliverables: { deliverables: [] },
-      payments: { payments: [] },
-    });
+    mockDashboardFetch(buildDashboardResponse({
+      deals: mockDeals,
+      deliverables: [],
+      payments: [],
+    }));
 
     render(<DashboardPage />);
 
@@ -360,11 +383,7 @@ describe("DashboardPage", () => {
   });
 
   it("shows empty state for upcoming deadlines when none exist", async () => {
-    mockFetchResponses({
-      deals: { deals: [] },
-      deliverables: { deliverables: [] },
-      payments: { payments: [] },
-    });
+    mockDashboardFetch(buildDashboardResponse());
 
     render(<DashboardPage />);
 
@@ -375,11 +394,7 @@ describe("DashboardPage", () => {
   });
 
   it("shows empty state for recent activity when none exist", async () => {
-    mockFetchResponses({
-      deals: { deals: [] },
-      deliverables: { deliverables: [] },
-      payments: { payments: [] },
-    });
+    mockDashboardFetch(buildDashboardResponse());
 
     render(<DashboardPage />);
 
@@ -392,11 +407,19 @@ describe("DashboardPage", () => {
   });
 
   it("handles null/undefined arrays from API", async () => {
-    mockFetchResponses({
-      deals: {},
-      deliverables: {},
-      payments: {},
-    });
+    mockDashboardFetch(buildDashboardResponse({
+      deals: undefined as any,
+      deliverables: undefined as any,
+      payments: undefined as any,
+      metrics: {
+        activeDeals: 0,
+        draftDeals: 0,
+        completedDeals: 0,
+        revenueMtd: 0,
+        pendingDeliverables: 0,
+        overduePayments: 0,
+      },
+    }));
 
     render(<DashboardPage />);
 
@@ -443,11 +466,11 @@ describe("DashboardPage", () => {
   });
 
   it("renders pipeline cards as links to deals page", async () => {
-    mockFetchResponses({
-      deals: { deals: mockDeals },
-      deliverables: { deliverables: [] },
-      payments: { payments: [] },
-    });
+    mockDashboardFetch(buildDashboardResponse({
+      deals: mockDeals,
+      deliverables: [],
+      payments: [],
+    }));
 
     render(<DashboardPage />);
 

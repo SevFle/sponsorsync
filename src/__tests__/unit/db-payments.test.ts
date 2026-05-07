@@ -67,6 +67,7 @@ import {
   createPayment,
   updatePayment,
   deletePayment,
+  getPaymentsByUserId,
 } from "@/lib/db/queries/payments";
 
 const samplePayment = {
@@ -203,5 +204,29 @@ describe("deletePayment", () => {
     await deletePayment("pay-1", "user-1");
     expect(mocks.selectInnerJoin).toHaveBeenCalled();
     expect(mocks.deleteFn).toHaveBeenCalled();
+  });
+});
+
+describe("getPaymentsByUserId", () => {
+  it("returns payments for a given user id via join", async () => {
+    mocks.selectWhere.mockResolvedValue([samplePayment]);
+    const result = await getPaymentsByUserId("user-1");
+    expect(result).toEqual([samplePayment]);
+    expect(mocks.select).toHaveBeenCalled();
+    expect(mocks.selectInnerJoin).toHaveBeenCalled();
+    expect(mocks.selectWhere).toHaveBeenCalled();
+  });
+
+  it("returns empty array when user has no payments", async () => {
+    mocks.selectWhere.mockResolvedValue([]);
+    const result = await getPaymentsByUserId("user-no-payments");
+    expect(result).toEqual([]);
+  });
+
+  it("returns multiple payments for a user", async () => {
+    const pays = [samplePayment, { ...samplePayment, id: "pay-2", amount: 2500 }];
+    mocks.selectWhere.mockResolvedValue(pays);
+    const result = await getPaymentsByUserId("user-1");
+    expect(result).toHaveLength(2);
   });
 });

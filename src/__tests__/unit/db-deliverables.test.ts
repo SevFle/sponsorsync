@@ -67,6 +67,7 @@ import {
   createDeliverable,
   updateDeliverable,
   deleteDeliverable,
+  getDeliverablesByUserId,
 } from "@/lib/db/queries/deliverables";
 
 const sampleDeliverable = {
@@ -197,5 +198,32 @@ describe("deleteDeliverable", () => {
     await deleteDeliverable("deliv-1", "user-1");
     expect(mocks.selectInnerJoin).toHaveBeenCalled();
     expect(mocks.deleteFn).toHaveBeenCalled();
+  });
+});
+
+describe("getDeliverablesByUserId", () => {
+  it("returns deliverables for a given user id via join", async () => {
+    mocks.selectWhere.mockResolvedValue([sampleDeliverable]);
+    const result = await getDeliverablesByUserId("user-1");
+    expect(result).toEqual([sampleDeliverable]);
+    expect(mocks.select).toHaveBeenCalled();
+    expect(mocks.selectInnerJoin).toHaveBeenCalled();
+    expect(mocks.selectWhere).toHaveBeenCalled();
+  });
+
+  it("returns empty array when user has no deliverables", async () => {
+    mocks.selectWhere.mockResolvedValue([]);
+    const result = await getDeliverablesByUserId("user-no-deliverables");
+    expect(result).toEqual([]);
+  });
+
+  it("returns multiple deliverables for a user", async () => {
+    const delivs = [
+      sampleDeliverable,
+      { ...sampleDeliverable, id: "deliv-2", title: "Newsletter Mention" },
+    ];
+    mocks.selectWhere.mockResolvedValue(delivs);
+    const result = await getDeliverablesByUserId("user-1");
+    expect(result).toHaveLength(2);
   });
 });

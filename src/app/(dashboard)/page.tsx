@@ -5,6 +5,7 @@ import { format, formatDistanceToNow, differenceInDays, isPast, isFuture } from 
 import { PageHeader } from "@/components/ui/page-header";
 import { StatusBadge, type DealStatus } from "@/components/ui/status-badge";
 import { Skeleton } from "@/components/ui/skeleton";
+import { apiFetch } from "@/lib/api-client";
 
 interface Deal {
   id: string;
@@ -35,6 +36,20 @@ interface Payment {
   createdAt: string;
   dealTitle?: string;
   sponsorName?: string;
+}
+
+interface DashboardData {
+  deals: Deal[];
+  deliverables: Deliverable[];
+  payments: Payment[];
+  metrics: {
+    activeDeals: number;
+    draftDeals: number;
+    completedDeals: number;
+    revenueMtd: number;
+    pendingDeliverables: number;
+    overduePayments: number;
+  };
 }
 
 function formatCurrency(amount: number, currency: string) {
@@ -182,9 +197,7 @@ function ErrorBanner({ message, onRetry }: { message: string; onRetry: () => voi
 }
 
 export default function DashboardPage() {
-  const [deals, setDeals] = useState<Deal[]>([]);
-  const [deliverables, setDeliverables] = useState<Deliverable[]>([]);
-  const [payments, setPayments] = useState<Payment[]>([]);
+  const [data, setData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -193,25 +206,8 @@ export default function DashboardPage() {
       setLoading(true);
       setError(null);
 
-      const [dealsRes, deliverablesRes, paymentsRes] = await Promise.all([
-        fetch("/api/deals", { signal }),
-        fetch("/api/deliverables", { signal }),
-        fetch("/api/payments", { signal }),
-      ]);
-
-      if (!dealsRes.ok || !deliverablesRes.ok || !paymentsRes.ok) {
-        throw new Error("Failed to load dashboard data");
-      }
-
-      const [dealsData, deliverablesData, paymentsData] = await Promise.all([
-        dealsRes.json(),
-        deliverablesRes.json(),
-        paymentsRes.json(),
-      ]);
-
-      setDeals(dealsData.deals ?? []);
-      setDeliverables(deliverablesData.deliverables ?? []);
-      setPayments(paymentsData.payments ?? []);
+      const result = await apiFetch<DashboardData>("/api/dashboard", { signal });
+      setData(result);
     } catch (err) {
       if (signal?.aborted) return;
       setError(err instanceof Error ? err.message : "Something went wrong");
@@ -226,21 +222,17 @@ export default function DashboardPage() {
     return () => controller.abort();
   }, [fetchDashboardData]);
 
-  const activeDeals = deals.filter((d) => d.status === "active").length;
-  const draftDeals = deals.filter((d) => d.status === "draft").length;
-  const completedDeals = deals.filter((d) => d.status === "completed").length;
-
-  const revenueMtd = payments
-    .filter((p) => p.status === "paid" && p.paidDate)
-    .reduce((sum, p) => sum + p.amount, 0);
-
-  const pendingDeliverables = deliverables.filter(
-    (d) => d.status === "pending" || d.status === "in_progress"
-  ).length;
-
-  const overduePayments = payments.filter(
-    (p) => p.status === "overdue" || (p.status === "pending" && p.dueDate && isPast(new Date(p.dueDate)))
-  ).length;
+  const deals = data?.deals ?? [];
+  const deliverables = data?.deliverables ?? [];
+  const payments = data?.payments ?? [];
+  const metrics = data?.metrics ?? {
+    activeDeals: 0,
+    draftDeals: 0,
+    completedDeals: 0,
+    revenueMtd: 0,
+    pendingDeliverables: 0,
+    overduePayments: 0,
+  };
 
   const upcomingDeliverables = deliverables
     .filter((d) => d.dueDate && isFuture(new Date(d.dueDate)) && d.status !== "verified" && d.status !== "missed")
@@ -305,10 +297,10 @@ export default function DashboardPage() {
 
       <div className="mt-6 space-y-8">
         <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-          <MetricCard label="Active Deals" value={activeDeals} accentColor="bg-blue-500" />
-          <MetricCard label="Revenue (MTD)" value={formatCurrency(revenueMtd, "USD")} accentColor="bg-green-500" />
-          <MetricCard label="Pending Deliverables" value={pendingDeliverables} accentColor="bg-amber-500" />
-          <MetricCard label="Overdue Payments" value={overduePayments} accentColor="bg-red-500" />
+          <MetricCard label="Active Deals" value={metrics.activeDeals} accentColor="bg-blue-500" />
+          <MetricCard label="Revenue (MTD)" value={formatCurrency(metrics.revenueMtd, "USD")} accentColor="bg-green-500" />
+          <MetricCard label="Pending Deliverables" value={metrics.pendingDeliverables} accentColor="bg-amber-500" />
+          <MetricCard label="Overdue Payments" value={metrics.overduePayments} accentColor="bg-red-500" />
         </div>
 
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
@@ -360,7 +352,7 @@ export default function DashboardPage() {
             >
               <div className="flex items-center justify-between">
                 <StatusBadge status="draft" />
-                <span className="text-2xl font-bold text-amber-700">{draftDeals}</span>
+                <span className="text-2xl font-bold text-amber-700">{metrics.draftDeals}</span>
               </div>
               <p className="mt-2 text-xs text-amber-600">Draft deals awaiting review</p>
             </a>
@@ -370,7 +362,7 @@ export default function DashboardPage() {
             >
               <div className="flex items-center justify-between">
                 <StatusBadge status="active" />
-                <span className="text-2xl font-bold text-green-700">{activeDeals}</span>
+                <span className="text-2xl font-bold text-green-700">{metrics.activeDeals}</span>
               </div>
               <p className="mt-2 text-xs text-green-600">Currently running sponsorships</p>
             </a>
@@ -380,7 +372,7 @@ export default function DashboardPage() {
             >
               <div className="flex items-center justify-between">
                 <StatusBadge status="completed" />
-                <span className="text-2xl font-bold text-slate-600">{completedDeals}</span>
+                <span className="text-2xl font-bold text-slate-600">{metrics.completedDeals}</span>
               </div>
               <p className="mt-2 text-xs text-slate-500">Successfully finished deals</p>
             </a>

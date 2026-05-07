@@ -6,6 +6,26 @@ export async function getDeliverablesByDealId(dealId: string) {
   return db.select().from(deliverables).where(eq(deliverables.dealId, dealId));
 }
 
+export async function getDeliverablesByUserId(userId: string) {
+  return db
+    .select({
+      id: deliverables.id,
+      dealId: deliverables.dealId,
+      title: deliverables.title,
+      description: deliverables.description,
+      status: deliverables.status,
+      dueDate: deliverables.dueDate,
+      completedDate: deliverables.completedDate,
+      verificationData: deliverables.verificationData,
+      notes: deliverables.notes,
+      createdAt: deliverables.createdAt,
+      updatedAt: deliverables.updatedAt,
+    })
+    .from(deliverables)
+    .innerJoin(deals, eq(deliverables.dealId, deals.id))
+    .where(eq(deals.userId, userId));
+}
+
 export async function getDeliverableById(id: string, userId: string) {
   const [deliverable] = await db
     .select({
