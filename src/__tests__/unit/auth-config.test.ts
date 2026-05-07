@@ -122,7 +122,7 @@ describe("CredentialsProvider authorize", () => {
     const credentialsProvider = authOptions.providers.find(
       (p: any) => p.type === "credentials"
     ) as any;
-    return credentialsProvider.authorize(credentials);
+    return credentialsProvider.options.authorize(credentials);
   }
 
   it("returns null when no credentials provided", async () => {

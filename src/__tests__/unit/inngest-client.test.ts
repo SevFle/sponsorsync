@@ -39,13 +39,17 @@ describe("deadlineReminderFunction", () => {
 
   it("step.run callback returns checked true", async () => {
     const handler = (deadlineReminderFunction as any).fn;
-    const stepRunResult = await handler({
-      step: {
-        run: vi.fn((_name: string, fn: () => Promise<any>) => fn()),
-      },
+    const stepRunMock = vi.fn((_name: string, fn: () => Promise<any>) => fn());
+    await handler({
+      step: { run: stepRunMock },
       event: {},
     });
-    expect(stepRunResult).toBeDefined();
+    expect(stepRunMock).toHaveBeenCalledWith(
+      "check-upcoming-deadlines",
+      expect.any(Function)
+    );
+    const cbResult = await stepRunMock.mock.results[0].value;
+    expect(cbResult).toEqual({ checked: true });
   });
 
   it("step.run 'check-upcoming-deadlines' resolves correctly", async () => {
@@ -77,13 +81,17 @@ describe("deliverableVerificationFunction", () => {
 
   it("step.run callback returns verified true", async () => {
     const handler = (deliverableVerificationFunction as any).fn;
-    const stepRunResult = await handler({
-      step: {
-        run: vi.fn((_name: string, fn: () => Promise<any>) => fn()),
-      },
+    const stepRunMock = vi.fn((_name: string, fn: () => Promise<any>) => fn());
+    await handler({
+      step: { run: stepRunMock },
       event: {},
     });
-    expect(stepRunResult).toBeDefined();
+    expect(stepRunMock).toHaveBeenCalledWith(
+      "verify-deliverables",
+      expect.any(Function)
+    );
+    const cbResult = await stepRunMock.mock.results[0].value;
+    expect(cbResult).toEqual({ verified: true });
   });
 
   it("step.run 'verify-deliverables' resolves correctly", async () => {
