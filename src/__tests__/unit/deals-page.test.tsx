@@ -253,4 +253,43 @@ describe("DealsPage", () => {
       expect(screen.getByText("No deals yet")).toBeInTheDocument();
     });
   });
+
+  it("aborts fetch on unmount", async () => {
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockReturnValue(new Promise(() => {}));
+    const { unmount } = render(<DealsPage />);
+
+    await waitFor(() => {
+      expect(fetchSpy).toHaveBeenCalledTimes(1);
+    });
+
+    const signal = fetchSpy.mock.calls[0]![1]!.signal as AbortSignal;
+    expect(signal.aborted).toBe(false);
+
+    unmount();
+
+    expect(signal.aborted).toBe(true);
+  });
+
+  it("does not set error state when fetch is aborted", async () => {
+    let rejectFetch!: (reason?: unknown) => void;
+    vi.spyOn(globalThis, "fetch").mockImplementation((_url, opts) => {
+      return new Promise((_resolve, reject) => {
+        rejectFetch = reject;
+        (opts as RequestInit).signal?.addEventListener("abort", () => {
+          reject(new DOMException("The operation was aborted.", "AbortError"));
+        });
+      }) as Promise<Response>;
+    });
+
+    const { unmount, container } = render(<DealsPage />);
+    await waitFor(() => {
+      expect(container.querySelectorAll(".animate-pulse").length).toBeGreaterThan(0);
+    });
+
+    unmount();
+
+    await waitFor(() => {
+      expect(screen.queryByText("Something went wrong")).not.toBeInTheDocument();
+    });
+  });
 });

@@ -28,15 +28,16 @@ export default function DealsPage() {
   const [search, setSearch] = useState("");
   const [activeTab, setActiveTab] = useState<FilterTab>("all");
 
-  const fetchDeals = useCallback(async () => {
+  const fetchDeals = useCallback(async (signal?: AbortSignal) => {
     try {
       setLoading(true);
       setError(null);
-      const res = await fetch("/api/deals");
+      const res = await fetch("/api/deals", { signal });
       if (!res.ok) throw new Error("Failed to fetch deals");
       const data: DealsResponse = await res.json();
       setDeals(data.deals ?? []);
     } catch (err) {
+      if (signal?.aborted) return;
       setError(err instanceof Error ? err.message : "Something went wrong");
     } finally {
       setLoading(false);
@@ -44,7 +45,9 @@ export default function DealsPage() {
   }, []);
 
   useEffect(() => {
-    fetchDeals();
+    const controller = new AbortController();
+    fetchDeals(controller.signal);
+    return () => controller.abort();
   }, [fetchDeals]);
 
   const filteredDeals = deals.filter((deal) => {
@@ -110,7 +113,7 @@ export default function DealsPage() {
           <div className="rounded-lg border border-red-200 bg-red-50 p-6 text-center">
             <p className="text-sm font-medium text-red-800">{error}</p>
             <button
-              onClick={fetchDeals}
+              onClick={() => fetchDeals()}
               className="mt-3 inline-flex items-center rounded-md bg-red-600 px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-red-700"
             >
               Try again
