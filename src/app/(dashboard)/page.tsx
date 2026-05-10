@@ -1,7 +1,9 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { format, formatDistanceToNow, differenceInDays, isPast, isFuture } from "date-fns";
+import { useSession } from "next-auth/react";
+import { useRouter } from "next/navigation";
+import { format, formatDistanceToNow, differenceInDays, isPast, isFuture, startOfDay } from "date-fns";
 import { PageHeader } from "@/components/ui/page-header";
 import { StatusBadge, type DealStatus } from "@/components/ui/status-badge";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -85,7 +87,7 @@ function DeadlineRow({ deliverable }: { deliverable: Deliverable }) {
   if (!deliverable.dueDate) return null;
 
   const date = new Date(deliverable.dueDate);
-  const daysUntil = differenceInDays(date, new Date());
+  const daysUntil = differenceInDays(startOfDay(date), startOfDay(new Date()));
   const overdue = isPast(date);
 
   let dotColor = "bg-blue-500";
@@ -197,6 +199,8 @@ function ErrorBanner({ message, onRetry }: { message: string; onRetry: () => voi
 }
 
 export default function DashboardPage() {
+  const { status: sessionStatus } = useSession();
+  const router = useRouter();
   const [data, setData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -217,10 +221,16 @@ export default function DashboardPage() {
   }, []);
 
   useEffect(() => {
+    if (sessionStatus === "unauthenticated") {
+      router.replace("/login");
+      return;
+    }
+    if (sessionStatus !== "authenticated") return;
+
     const controller = new AbortController();
     fetchDashboardData(controller.signal);
     return () => controller.abort();
-  }, [fetchDashboardData]);
+  }, [fetchDashboardData, sessionStatus, router]);
 
   const deals = data?.deals ?? [];
   const deliverables = data?.deliverables ?? [];
