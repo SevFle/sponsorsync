@@ -9,7 +9,7 @@ on:
 jobs:
   lint-and-test:
     name: Lint, Typecheck & Test
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, mtaap]
 
     env:
       DATABASE_URL: postgresql://postgres:postgres@localhost:5432/sponsorsync_test
@@ -59,7 +59,7 @@ jobs:
 
   e2e:
     name: E2E Tests
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, mtaap]
     needs: lint-and-test
 
     env:
