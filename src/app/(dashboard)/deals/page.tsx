@@ -1,13 +1,25 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import { useSession } from "next-auth/react";
+import { useRouter } from "next/navigation";
 import { PageHeader } from "@/components/ui/page-header";
 import { DealCard, type DealCardDeal } from "@/components/ui/deal-card";
 import { EmptyState } from "@/components/ui/empty-state";
 import { DealCardSkeleton } from "@/components/ui/skeleton";
+import { apiFetch } from "@/lib/api-client";
 import { cn } from "@/lib/utils";
 
 type FilterTab = "all" | "active" | "draft" | "completed" | "cancelled";
+
+type SortOption =
+  | "endDate-asc"
+  | "endDate-desc"
+  | "totalValue-desc"
+  | "totalValue-asc"
+  | "sponsorName-asc"
+  | "sponsorName-desc"
+  | "status-asc";
 
 interface DealsResponse {
   deals: DealCardDeal[];
@@ -21,20 +33,61 @@ const tabs: { key: FilterTab; label: string }[] = [
   { key: "cancelled", label: "Cancelled" },
 ];
 
+const sortOptions: { value: SortOption; label: string }[] = [
+  { value: "endDate-asc", label: "Deadline (nearest)" },
+  { value: "endDate-desc", label: "Deadline (farthest)" },
+  { value: "totalValue-desc", label: "Value (high to low)" },
+  { value: "totalValue-asc", label: "Value (low to high)" },
+  { value: "sponsorName-asc", label: "Sponsor (A-Z)" },
+  { value: "sponsorName-desc", label: "Sponsor (Z-A)" },
+  { value: "status-asc", label: "Status (A-Z)" },
+];
+
+function sortDeals(deals: DealCardDeal[], sort: SortOption): DealCardDeal[] {
+  const sorted = [...deals];
+  const [field, dir] = sort.split("-") as [string, "asc" | "desc"];
+  const mult = dir === "desc" ? -1 : 1;
+
+  sorted.sort((a, b) => {
+    switch (field) {
+      case "endDate": {
+        const aT = a.endDate ? new Date(a.endDate).getTime() : null;
+        const bT = b.endDate ? new Date(b.endDate).getTime() : null;
+        if (aT === null && bT === null) return 0;
+        if (aT === null) return 1;
+        if (bT === null) return -1;
+        return mult * (aT - bT);
+      }
+      case "totalValue":
+        return mult * ((a.totalValue ?? 0) - (b.totalValue ?? 0));
+      case "sponsorName":
+        return mult * a.sponsorName.localeCompare(b.sponsorName);
+      case "status":
+        return mult * a.status.localeCompare(b.status);
+      default:
+        return 0;
+    }
+  });
+
+  return sorted;
+}
+
 export default function DealsPage() {
+  const { status: sessionStatus } = useSession();
+  const router = useRouter();
+
   const [deals, setDeals] = useState<DealCardDeal[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [activeTab, setActiveTab] = useState<FilterTab>("all");
+  const [sort, setSort] = useState<SortOption>("endDate-asc");
 
   const fetchDeals = useCallback(async (signal?: AbortSignal) => {
     try {
       setLoading(true);
       setError(null);
-      const res = await fetch("/api/deals", { signal });
-      if (!res.ok) throw new Error("Failed to fetch deals");
-      const data: DealsResponse = await res.json();
+      const data = await apiFetch<DealsResponse>("/api/deals", { signal });
       setDeals(data.deals ?? []);
     } catch (err) {
       if (signal?.aborted) return;
@@ -45,10 +98,16 @@ export default function DealsPage() {
   }, []);
 
   useEffect(() => {
+    if (sessionStatus === "unauthenticated") {
+      router.replace("/login");
+      return;
+    }
+    if (sessionStatus !== "authenticated") return;
+
     const controller = new AbortController();
     fetchDeals(controller.signal);
     return () => controller.abort();
-  }, [fetchDeals]);
+  }, [fetchDeals, sessionStatus, router]);
 
   const filteredDeals = deals.filter((deal) => {
     const matchesTab = activeTab === "all" || deal.status === activeTab;
@@ -62,7 +121,12 @@ export default function DealsPage() {
     return matchesTab && matchesSearch;
   });
 
+  const sortedFilteredDeals = sortDeals(filteredDeals, sort);
   const hasFilters = search !== "" || activeTab !== "all";
+
+  if (sessionStatus !== "authenticated") {
+    return null;
+  }
 
   return (
     <div>
@@ -79,14 +143,26 @@ export default function DealsPage() {
         }
       />
 
-      <div className="mt-6">
+      <div className="mt-6 flex gap-3">
         <input
           type="text"
           placeholder="Search deals by sponsor, status, or keyword..."
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          className="w-full rounded-md border border-gray-300 px-4 py-2.5 text-sm placeholder:text-gray-400 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+          className="flex-1 rounded-md border border-gray-300 px-4 py-2.5 text-sm placeholder:text-gray-400 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
         />
+        <select
+          value={sort}
+          onChange={(e) => setSort(e.target.value as SortOption)}
+          aria-label="Sort deals"
+          className="rounded-md border border-gray-300 px-3 py-2.5 text-sm text-gray-700 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+        >
+          {sortOptions.map((opt) => (
+            <option key={opt.value} value={opt.value}>
+              {opt.label}
+            </option>
+          ))}
+        </select>
       </div>
 
       <div className="mt-4 flex flex-wrap gap-2">
@@ -119,7 +195,7 @@ export default function DealsPage() {
               Try again
             </button>
           </div>
-        ) : filteredDeals.length === 0 ? (
+        ) : sortedFilteredDeals.length === 0 ? (
           <EmptyState
             message={hasFilters ? "No deals match your filters" : "No deals yet"}
             description={
@@ -129,7 +205,7 @@ export default function DealsPage() {
             }
           />
         ) : (
-          filteredDeals.map((deal) => (
+          sortedFilteredDeals.map((deal) => (
             <a
               key={deal.id}
               href={`/dashboard/deals/${deal.id}`}
