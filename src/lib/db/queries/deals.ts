@@ -6,6 +6,13 @@ export async function getDealsByUserId(userId: string) {
   return db.select().from(deals).where(eq(deals.userId, userId));
 }
 
+export async function getDealsBySponsorId(sponsorId: string, userId: string) {
+  return db
+    .select()
+    .from(deals)
+    .where(and(eq(deals.sponsorId, sponsorId), eq(deals.userId, userId)));
+}
+
 export async function getDealById(id: string, userId: string) {
   const [deal] = await db.select().from(deals).where(and(eq(deals.id, id), eq(deals.userId, userId)));
   return deal;
