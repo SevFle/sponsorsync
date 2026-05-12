@@ -1,14 +1,13 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { useSession } from "next-auth/react";
-import { useRouter } from "next/navigation";
 import { PageHeader } from "@/components/ui/page-header";
 import { DealCard, type DealCardDeal } from "@/components/ui/deal-card";
 import { EmptyState } from "@/components/ui/empty-state";
 import { DealCardSkeleton } from "@/components/ui/skeleton";
 import { apiFetch } from "@/lib/api-client";
 import { cn } from "@/lib/utils";
+import { useAuth } from "@/hooks/use-auth";
 
 type FilterTab = "all" | "active" | "draft" | "completed" | "cancelled";
 
@@ -73,8 +72,7 @@ function sortDeals(deals: DealCardDeal[], sort: SortOption): DealCardDeal[] {
 }
 
 export default function DealsPage() {
-  const { status: sessionStatus } = useSession();
-  const router = useRouter();
+  const { isAuthenticated } = useAuth();
 
   const [deals, setDeals] = useState<DealCardDeal[]>([]);
   const [loading, setLoading] = useState(true);
@@ -98,16 +96,12 @@ export default function DealsPage() {
   }, []);
 
   useEffect(() => {
-    if (sessionStatus === "unauthenticated") {
-      router.replace("/login");
-      return;
-    }
-    if (sessionStatus !== "authenticated") return;
+    if (!isAuthenticated) return;
 
     const controller = new AbortController();
     fetchDeals(controller.signal);
     return () => controller.abort();
-  }, [fetchDeals, sessionStatus, router]);
+  }, [fetchDeals, isAuthenticated]);
 
   const filteredDeals = deals.filter((deal) => {
     const matchesTab = activeTab === "all" || deal.status === activeTab;
@@ -124,7 +118,7 @@ export default function DealsPage() {
   const sortedFilteredDeals = sortDeals(filteredDeals, sort);
   const hasFilters = search !== "" || activeTab !== "all";
 
-  if (sessionStatus !== "authenticated") {
+  if (!isAuthenticated) {
     return null;
   }
 

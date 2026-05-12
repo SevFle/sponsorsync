@@ -1,13 +1,12 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { useSession } from "next-auth/react";
-import { useRouter } from "next/navigation";
 import { format, formatDistanceToNow, differenceInDays, isPast, isFuture, startOfDay } from "date-fns";
 import { PageHeader } from "@/components/ui/page-header";
 import { StatusBadge, type DealStatus } from "@/components/ui/status-badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { apiFetch } from "@/lib/api-client";
+import { useAuth } from "@/hooks/use-auth";
 
 interface Deal {
   id: string;
@@ -199,8 +198,7 @@ function ErrorBanner({ message, onRetry }: { message: string; onRetry: () => voi
 }
 
 export default function DashboardPage() {
-  const { status: sessionStatus } = useSession();
-  const router = useRouter();
+  const { isAuthenticated } = useAuth();
   const [data, setData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -221,16 +219,12 @@ export default function DashboardPage() {
   }, []);
 
   useEffect(() => {
-    if (sessionStatus === "unauthenticated") {
-      router.replace("/login");
-      return;
-    }
-    if (sessionStatus !== "authenticated") return;
+    if (!isAuthenticated) return;
 
     const controller = new AbortController();
     fetchDashboardData(controller.signal);
     return () => controller.abort();
-  }, [fetchDashboardData, sessionStatus, router]);
+  }, [fetchDashboardData, isAuthenticated]);
 
   const deals = data?.deals ?? [];
   const deliverables = data?.deliverables ?? [];
