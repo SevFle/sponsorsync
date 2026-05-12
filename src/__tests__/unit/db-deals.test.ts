@@ -58,7 +58,7 @@ vi.mock("drizzle-orm", () => ({
   and: vi.fn((...clauses) => ({ and: clauses })),
 }));
 
-import { getDealsByUserId, getDealById, createDeal, updateDeal, deleteDeal } from "@/lib/db/queries/deals";
+import { getDealsByUserId, getDealsBySponsorId, getDealById, createDeal, updateDeal, deleteDeal } from "@/lib/db/queries/deals";
 
 const sampleDeal = {
   id: "550e8400-e29b-41d4-a716-446655440000",
@@ -225,6 +225,40 @@ describe("deleteDeal", () => {
     await deleteDeal("deal-1", userId);
     expect(mocks.deleteWhere).toHaveBeenCalledWith(
       { and: [{ col: "id", val: "deal-1" }, { col: "user_id", val: userId }] }
+    );
+  });
+});
+
+describe("getDealsBySponsorId", () => {
+  it("returns deals for a given sponsor scoped to user", async () => {
+    mocks.selectWhere.mockResolvedValue([sampleDeal]);
+    const result = await getDealsBySponsorId("sponsor-1", "user-1");
+    expect(result).toEqual([sampleDeal]);
+    expect(mocks.select).toHaveBeenCalled();
+    expect(mocks.selectWhere).toHaveBeenCalledWith(
+      { and: [{ col: "sponsor_id", val: "sponsor-1" }, { col: "user_id", val: "user-1" }] }
+    );
+  });
+
+  it("returns empty array when sponsor has no deals", async () => {
+    mocks.selectWhere.mockResolvedValue([]);
+    const result = await getDealsBySponsorId("sponsor-no-deals", "user-1");
+    expect(result).toEqual([]);
+  });
+
+  it("returns multiple deals for a sponsor", async () => {
+    const deals = [sampleDeal, { ...sampleDeal, id: "deal-2", title: "Second Deal" }];
+    mocks.selectWhere.mockResolvedValue(deals);
+    const result = await getDealsBySponsorId("sponsor-1", "user-1");
+    expect(result).toHaveLength(2);
+  });
+
+  it("scopes to user so different user sees nothing", async () => {
+    mocks.selectWhere.mockResolvedValue([]);
+    const result = await getDealsBySponsorId("sponsor-1", "other-user");
+    expect(result).toEqual([]);
+    expect(mocks.selectWhere).toHaveBeenCalledWith(
+      { and: [{ col: "sponsor_id", val: "sponsor-1" }, { col: "user_id", val: "other-user" }] }
     );
   });
 });

@@ -19,12 +19,21 @@ vi.mock("@/lib/db/queries/sponsors", () => ({
   deleteSponsor: vi.fn(),
 }));
 
+vi.mock("@/lib/db/queries/deals", () => ({
+  getDealsBySponsorId: vi.fn(),
+}));
+
+vi.mock("@/domain/deals", () => ({
+  calculateDealProgress: vi.fn(() => 50),
+}));
+
 import { getServerSession } from "next-auth";
 import {
   getSponsorById,
   updateSponsor,
   deleteSponsor,
 } from "@/lib/db/queries/sponsors";
+import { getDealsBySponsorId } from "@/lib/db/queries/deals";
 
 const mockSession = { user: { id: "user-1", email: "test@test.com" } };
 
@@ -38,6 +47,34 @@ beforeEach(() => {
 });
 
 const UUID = "550e8400-e29b-41d4-a716-446655440000";
+
+const sampleSponsor = {
+  id: UUID,
+  userId: "user-1",
+  name: "Acme Corp",
+  company: "Acme Inc",
+  email: "contact@acme.com",
+  phone: "+1234567890",
+  notes: "Premium sponsor",
+  createdAt: new Date("2024-01-01"),
+  updatedAt: new Date("2024-01-01"),
+};
+
+const sampleDeal = {
+  id: "deal-1",
+  userId: "user-1",
+  sponsorId: UUID,
+  title: "Q2 Package",
+  description: null,
+  status: "active" as const,
+  totalValue: 12000,
+  currency: "USD",
+  startDate: null,
+  endDate: null,
+  contractUrl: null,
+  createdAt: new Date("2024-01-01"),
+  updatedAt: new Date("2024-01-01"),
+};
 
 describe("GET /api/sponsors/[id]", () => {
   it("returns 401 when not authenticated", async () => {
@@ -61,11 +98,10 @@ describe("GET /api/sponsors/[id]", () => {
     expect(body.error).toBe("Invalid id parameter");
   });
 
-  it("returns sponsor scoped to user", async () => {
-    (getSponsorById as ReturnType<typeof vi.fn>).mockResolvedValue({
-      id: UUID,
-      name: "Acme Corp",
-    });
+  it("returns sponsor with deals scoped to user", async () => {
+    (getSponsorById as ReturnType<typeof vi.fn>).mockResolvedValue(sampleSponsor);
+    (getDealsBySponsorId as ReturnType<typeof vi.fn>).mockResolvedValue([sampleDeal]);
+
     const response = await GetById(
       new Request(`http://localhost:3000/api/sponsors/${UUID}`),
       { params: Promise.resolve({ id: UUID }) }
@@ -73,8 +109,26 @@ describe("GET /api/sponsors/[id]", () => {
     const body = await response.json();
 
     expect(response.status).toBe(200);
-    expect(body.sponsor).toEqual({ id: UUID, name: "Acme Corp" });
+    expect(body.sponsor.name).toBe("Acme Corp");
+    expect(body.sponsor.id).toBe(UUID);
+    expect(body.deals).toHaveLength(1);
+    expect(body.deals[0].title).toBe("Q2 Package");
     expect(getSponsorById).toHaveBeenCalledWith(UUID, "user-1");
+    expect(getDealsBySponsorId).toHaveBeenCalledWith(UUID, "user-1");
+  });
+
+  it("returns sponsor with empty deals array", async () => {
+    (getSponsorById as ReturnType<typeof vi.fn>).mockResolvedValue(sampleSponsor);
+    (getDealsBySponsorId as ReturnType<typeof vi.fn>).mockResolvedValue([]);
+
+    const response = await GetById(
+      new Request(`http://localhost:3000/api/sponsors/${UUID}`),
+      { params: Promise.resolve({ id: UUID }) }
+    );
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body.deals).toEqual([]);
   });
 
   it("returns 404 when sponsor not found", async () => {

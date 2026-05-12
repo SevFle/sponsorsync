@@ -3,6 +3,8 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth/config";
 import { updateSponsorSchema } from "@/domain/sponsors";
 import { getSponsorById, updateSponsor, deleteSponsor } from "@/lib/db/queries/sponsors";
+import { getDealsBySponsorId } from "@/lib/db/queries/deals";
+import { calculateDealProgress } from "@/domain/deals";
 import { z } from "zod";
 
 const idParamSchema = z.string().uuid();
@@ -30,7 +32,22 @@ export async function GET(
   if (!sponsor) {
     return NextResponse.json({ error: "Sponsor not found" }, { status: 404 });
   }
-  return NextResponse.json({ sponsor });
+
+  const sponsorDeals = await getDealsBySponsorId(id, userId);
+  const deals = sponsorDeals.map((deal) => ({
+    id: deal.id,
+    title: deal.title,
+    description: deal.description,
+    status: deal.status,
+    totalValue: deal.totalValue,
+    currency: deal.currency ?? "USD",
+    startDate: deal.startDate,
+    endDate: deal.endDate,
+    createdAt: deal.createdAt,
+    updatedAt: deal.updatedAt,
+  }));
+
+  return NextResponse.json({ sponsor, deals });
 }
 
 export async function PATCH(
