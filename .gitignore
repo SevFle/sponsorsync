@@ -40,3 +40,4 @@ next-env.d.ts
 
 # drizzle
 drizzle.meta
+.evolve-prompt.md

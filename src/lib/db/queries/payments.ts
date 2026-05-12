@@ -1,5 +1,5 @@
 import { db } from "..";
-import { payments, deals } from "../schema";
+import { payments, deals, sponsors } from "../schema";
 import { eq, and } from "drizzle-orm";
 
 export async function getPaymentsByDealId(dealId: string) {
@@ -23,6 +23,29 @@ export async function getPaymentsByUserId(userId: string) {
     })
     .from(payments)
     .innerJoin(deals, eq(payments.dealId, deals.id))
+    .where(eq(deals.userId, userId));
+}
+
+export async function getEnrichedPaymentsByUserId(userId: string) {
+  return db
+    .select({
+      id: payments.id,
+      dealId: payments.dealId,
+      amount: payments.amount,
+      currency: payments.currency,
+      status: payments.status,
+      dueDate: payments.dueDate,
+      paidDate: payments.paidDate,
+      invoiceUrl: payments.invoiceUrl,
+      notes: payments.notes,
+      createdAt: payments.createdAt,
+      updatedAt: payments.updatedAt,
+      dealTitle: deals.title,
+      sponsorName: sponsors.name,
+    })
+    .from(payments)
+    .innerJoin(deals, eq(payments.dealId, deals.id))
+    .innerJoin(sponsors, eq(deals.sponsorId, sponsors.id))
     .where(eq(deals.userId, userId));
 }
 
