@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
+import { getToken } from "next-auth/jwt";
 
-export function middleware(request: NextRequest) {
+export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
   if (pathname.startsWith("/api/webhooks")) {
@@ -10,6 +11,22 @@ export function middleware(request: NextRequest) {
 
   if (pathname === "/api/health") {
     return NextResponse.next();
+  }
+
+  if (pathname.startsWith("/api/auth")) {
+    return NextResponse.next();
+  }
+
+  if (pathname === "/login" || pathname === "/callback") {
+    return NextResponse.next();
+  }
+
+  if (pathname === "/" || pathname.startsWith("/dashboard")) {
+    const token = await getToken({ req: request });
+    if (!token) {
+      const loginUrl = new URL("/login", request.url);
+      return NextResponse.redirect(loginUrl);
+    }
   }
 
   return NextResponse.next();
