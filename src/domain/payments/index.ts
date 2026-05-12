@@ -4,6 +4,7 @@ export const createPaymentSchema = z.object({
   dealId: z.string().uuid(),
   amount: z.number().int().positive(),
   currency: z.string().length(3).optional(),
+  status: z.enum(["pending", "paid", "overdue", "cancelled"]).optional(),
   dueDate: z.string().date().optional(),
 });
 
