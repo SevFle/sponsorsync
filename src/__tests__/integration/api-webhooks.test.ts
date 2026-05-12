@@ -1,5 +1,27 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { describe, it, expect, vi, beforeEach } from "vitest";
+import { NextRequest } from "next/server";
 import { POST as StripeWebhook } from "@/app/api/webhooks/stripe/route";
+
+vi.mock("inngest/next", () => ({
+  serve: vi.fn(() => ({
+    GET: vi.fn(),
+    POST: vi.fn(async (request: Request) => {
+      return new Response(JSON.stringify({ received: true }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    }),
+    PUT: vi.fn(),
+  })),
+}));
+
+vi.mock("@/lib/inngest/client", () => ({
+  inngest: { id: "sponsorsync" },
+  deadlineReminderFunction: {},
+  deliverableVerificationFunction: {},
+  paymentFollowUpFunction: {},
+}));
+
 import { POST as InngestWebhook } from "@/app/api/webhooks/inngest/route";
 
 describe("POST /api/webhooks/stripe", () => {
@@ -113,34 +135,27 @@ describe("POST /api/webhooks/stripe", () => {
 });
 
 describe("POST /api/webhooks/inngest", () => {
-  it("returns received true with echoed body", async () => {
+  it("delegates to inngest serve handler", async () => {
     const payload = { event: "test/event", data: { key: "value" } };
-    const request = new Request("http://localhost:3000/api/webhooks/inngest", {
+    const request = new NextRequest("http://localhost:3000/api/webhooks/inngest", {
       method: "POST",
       body: JSON.stringify(payload),
       headers: { "Content-Type": "application/json" },
     });
 
-    const response = await InngestWebhook(request);
-    const body = await response.json();
-
+    const response = await InngestWebhook(request, undefined as unknown);
     expect(response.status).toBe(200);
-    expect(body.received).toBe(true);
-    expect(body.event).toBe("test/event");
-    expect(body.data).toEqual({ key: "value" });
   });
 
-  it("echoes the entire payload alongside received flag", async () => {
-    const payload = { foo: "bar", nested: { a: 1 } };
-    const request = new Request("http://localhost:3000/api/webhooks/inngest", {
+  it("returns JSON response from serve", async () => {
+    const request = new NextRequest("http://localhost:3000/api/webhooks/inngest", {
       method: "POST",
-      body: JSON.stringify(payload),
+      body: JSON.stringify({ test: true }),
       headers: { "Content-Type": "application/json" },
     });
 
-    const response = await InngestWebhook(request);
+    const response = await InngestWebhook(request, undefined as unknown);
     const body = await response.json();
-
-    expect(body).toEqual({ received: true, foo: "bar", nested: { a: 1 } });
+    expect(body).toBeDefined();
   });
 });

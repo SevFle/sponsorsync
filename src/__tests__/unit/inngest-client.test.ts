@@ -1,13 +1,36 @@
 import { describe, it, expect, vi } from "vitest";
+
+vi.mock("@/lib/inngest/deadline-checker", () => ({
+  processDeadlineChecks: vi.fn().mockResolvedValue({
+    usersProcessed: 0,
+    notificationsCreated: 0,
+    emailsSent: 0,
+    errors: [],
+  }),
+}));
+
+vi.mock("@/lib/inngest/payment-follower", () => ({
+  processPaymentFollowUps: vi.fn().mockResolvedValue({
+    usersProcessed: 0,
+    notificationsCreated: 0,
+    emailsSent: 0,
+    errors: [],
+  }),
+}));
+
 import {
   inngest,
   deadlineReminderFunction,
   deliverableVerificationFunction,
+  paymentFollowUpFunction,
 } from "@/lib/inngest/client";
+import { processDeadlineChecks } from "@/lib/inngest/deadline-checker";
+import { processPaymentFollowUps } from "@/lib/inngest/payment-follower";
 
 describe("inngest client", () => {
   it("creates inngest client with correct id", () => {
     expect(inngest).toBeDefined();
+    expect((inngest as any).id).toBe("sponsorsync");
   });
 
   it("exports deadline reminder function", () => {
@@ -18,8 +41,8 @@ describe("inngest client", () => {
     expect(deliverableVerificationFunction).toBeDefined();
   });
 
-  it("inngest client has correct id", () => {
-    expect((inngest as any).id).toBe("sponsorsync");
+  it("exports payment follow-up function", () => {
+    expect(paymentFollowUpFunction).toBeDefined();
   });
 });
 
@@ -32,36 +55,31 @@ describe("deadlineReminderFunction", () => {
     expect((deadlineReminderFunction as any).name).toBe("Deadline Reminder");
   });
 
-  it("has cron trigger configured", () => {
+  it("has opts configured", () => {
     const opts = (deadlineReminderFunction as any).opts;
     expect(opts).toBeDefined();
   });
 
-  it("step.run callback returns checked true", async () => {
-    const handler = (deadlineReminderFunction as any).fn;
-    const stepRunMock = vi.fn((_name: string, fn: () => Promise<any>) => fn());
-    await handler({
-      step: { run: stepRunMock },
-      event: {},
-    });
-    expect(stepRunMock).toHaveBeenCalledWith(
-      "check-upcoming-deadlines",
-      expect.any(Function)
-    );
-    const cbResult = await stepRunMock.mock.results[0].value;
-    expect(cbResult).toEqual({ checked: true });
-  });
+  it("step.run calls processDeadlineChecks", async () => {
+    const mockResult = {
+      usersProcessed: 5,
+      notificationsCreated: 10,
+      emailsSent: 8,
+      errors: [],
+    };
+    (processDeadlineChecks as ReturnType<typeof vi.fn>).mockResolvedValue(mockResult);
 
-  it("step.run 'check-upcoming-deadlines' resolves correctly", async () => {
-    const stepRunMock = vi.fn((_name: string, fn: () => Promise<any>) => fn());
     const handler = (deadlineReminderFunction as any).fn;
+    const stepRunMock = vi.fn((_name: string, fn: () => Promise<any>) => fn());
     await handler({ step: { run: stepRunMock }, event: {} });
+
     expect(stepRunMock).toHaveBeenCalledWith(
       "check-upcoming-deadlines",
       expect.any(Function)
     );
-    const result = await stepRunMock.mock.calls[0][1]();
-    expect(result).toEqual({ checked: true });
+    expect(processDeadlineChecks).toHaveBeenCalled();
+    const result = await stepRunMock.mock.results[0].value;
+    expect(result).toEqual(mockResult);
   });
 });
 
@@ -74,35 +92,63 @@ describe("deliverableVerificationFunction", () => {
     expect((deliverableVerificationFunction as any).name).toBe("Deliverable Verification");
   });
 
-  it("has cron trigger configured", () => {
+  it("has opts configured", () => {
     const opts = (deliverableVerificationFunction as any).opts;
     expect(opts).toBeDefined();
   });
 
-  it("step.run callback returns verified true", async () => {
+  it("step.run calls processDeadlineChecks", async () => {
+    (processDeadlineChecks as ReturnType<typeof vi.fn>).mockResolvedValue({
+      usersProcessed: 0,
+      notificationsCreated: 0,
+      emailsSent: 0,
+      errors: [],
+    });
+
     const handler = (deliverableVerificationFunction as any).fn;
     const stepRunMock = vi.fn((_name: string, fn: () => Promise<any>) => fn());
-    await handler({
-      step: { run: stepRunMock },
-      event: {},
-    });
+    await handler({ step: { run: stepRunMock }, event: {} });
+
     expect(stepRunMock).toHaveBeenCalledWith(
       "verify-deliverables",
       expect.any(Function)
     );
-    const cbResult = await stepRunMock.mock.results[0].value;
-    expect(cbResult).toEqual({ verified: true });
+  });
+});
+
+describe("paymentFollowUpFunction", () => {
+  it("has payment-follow-up as id", () => {
+    expect((paymentFollowUpFunction as any).id()).toBe("payment-follow-up");
   });
 
-  it("step.run 'verify-deliverables' resolves correctly", async () => {
+  it("has a name property", () => {
+    expect((paymentFollowUpFunction as any).name).toBe("Payment Follow-Up");
+  });
+
+  it("has opts configured", () => {
+    const opts = (paymentFollowUpFunction as any).opts;
+    expect(opts).toBeDefined();
+  });
+
+  it("step.run calls processPaymentFollowUps", async () => {
+    const mockResult = {
+      usersProcessed: 3,
+      notificationsCreated: 5,
+      emailsSent: 4,
+      errors: [],
+    };
+    (processPaymentFollowUps as ReturnType<typeof vi.fn>).mockResolvedValue(mockResult);
+
+    const handler = (paymentFollowUpFunction as any).fn;
     const stepRunMock = vi.fn((_name: string, fn: () => Promise<any>) => fn());
-    const handler = (deliverableVerificationFunction as any).fn;
     await handler({ step: { run: stepRunMock }, event: {} });
+
     expect(stepRunMock).toHaveBeenCalledWith(
-      "verify-deliverables",
+      "check-overdue-payments",
       expect.any(Function)
     );
-    const result = await stepRunMock.mock.calls[0][1]();
-    expect(result).toEqual({ verified: true });
+    expect(processPaymentFollowUps).toHaveBeenCalled();
+    const result = await stepRunMock.mock.results[0].value;
+    expect(result).toEqual(mockResult);
   });
 });

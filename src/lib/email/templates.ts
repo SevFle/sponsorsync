@@ -19,6 +19,42 @@ export async function sendDeadlineReminder(
   });
 }
 
+export async function sendOverdueDeliverableReminder(
+  to: string,
+  dealTitle: string,
+  deliverableTitle: string,
+  dueDate: string
+) {
+  return resend.emails.send({
+    from: "SponsorSync <notifications@sponsorsync.app>",
+    to,
+    subject: `Overdue Deliverable: ${deliverableTitle}`,
+    html: `
+      <h2>Overdue Deliverable</h2>
+      <p>The deliverable <strong>${deliverableTitle}</strong> for sponsorship deal <strong>${dealTitle}</strong> was due on <strong>${dueDate}</strong> and is now overdue.</p>
+      <p>Please log in to SponsorSync to update the status and take action.</p>
+    `,
+  });
+}
+
+export async function sendPaymentFollowUp(
+  to: string,
+  dealTitle: string,
+  amount: string,
+  dueDate: string
+) {
+  return resend.emails.send({
+    from: "SponsorSync <notifications@sponsorsync.app>",
+    to,
+    subject: `Payment Follow-Up: ${amount} for ${dealTitle}`,
+    html: `
+      <h2>Payment Follow-Up</h2>
+      <p>A payment of <strong>${amount}</strong> for sponsorship deal <strong>${dealTitle}</strong> was due on <strong>${dueDate}</strong> and has not been received.</p>
+      <p>Log in to SponsorSync to update the payment status or send a reminder to the sponsor.</p>
+    `,
+  });
+}
+
 export async function sendSponsorCommunication(
   to: string,
   subject: string,

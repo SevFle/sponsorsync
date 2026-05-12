@@ -1,6 +1,20 @@
-import { NextResponse } from "next/server";
+import { serve } from "inngest/next";
+import {
+  inngest,
+  deadlineReminderFunction,
+  deliverableVerificationFunction,
+  paymentFollowUpFunction,
+} from "@/lib/inngest/client";
 
-export async function POST(request: Request) {
-  const body = await request.json();
-  return NextResponse.json({ received: true, ...body });
-}
+const handler = serve({
+  client: inngest,
+  functions: [
+    deadlineReminderFunction,
+    deliverableVerificationFunction,
+    paymentFollowUpFunction,
+  ],
+} as unknown as Parameters<typeof serve>[0]);
+
+export const GET = handler.GET;
+export const POST = handler.POST;
+export const PUT = handler.PUT;
