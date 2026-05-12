@@ -86,7 +86,8 @@ describe("DashboardLayout", () => {
 
     await expect(
       DashboardLayout({ children: <div>test</div> })
-    ).resolves.toBeDefined();
+    ).rejects.toThrow("NEXT_REDIRECT");
+    expect(redirect).toHaveBeenCalledWith("/login");
   });
 
   it("renders all navigation links", async () => {
