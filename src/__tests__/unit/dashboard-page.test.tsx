@@ -906,3 +906,257 @@ describe("DashboardPage - boundary values", () => {
     expect(screen.getByText("1d left")).toBeInTheDocument();
   });
 });
+
+describe("DashboardPage - session status edge cases", () => {
+  it("does not redirect when session status transitions from loading to authenticated", async () => {
+    let currentStatus = "loading";
+    (useSession as ReturnType<typeof vi.fn>).mockImplementation(() => ({
+      data: currentStatus === "authenticated" ? { user: { id: "user-1" } } : null,
+      status: currentStatus,
+    }));
+
+    mockDashboardFetch(buildDashboardResponse());
+
+    const { rerender } = render(<DashboardPage />);
+
+    expect(mockRouter.replace).not.toHaveBeenCalled();
+
+    currentStatus = "authenticated";
+    rerender(<DashboardPage />);
+
+    await waitFor(() => {
+      expect(screen.getByText("Dashboard")).toBeInTheDocument();
+    });
+
+    expect(mockRouter.replace).not.toHaveBeenCalled();
+  });
+
+  it("does not attempt fetch when session has data but status is loading", async () => {
+    (useSession as ReturnType<typeof vi.fn>).mockReturnValue({
+      data: { user: { id: "user-1" } },
+      status: "loading",
+    });
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockReturnValue(new Promise(() => {}));
+
+    render(<DashboardPage />);
+
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
+  it("handles null session data with authenticated status gracefully", async () => {
+    (useSession as ReturnType<typeof vi.fn>).mockReturnValue({
+      data: null,
+      status: "authenticated",
+    });
+    mockDashboardFetch(buildDashboardResponse());
+
+    render(<DashboardPage />);
+
+    await waitFor(() => {
+      expect(screen.getByText("Dashboard")).toBeInTheDocument();
+    });
+  });
+});
+
+describe("DashboardPage - fetch credentials verification", () => {
+  it("always includes credentials: include for all HTTP methods", async () => {
+    mockAuthenticatedSession();
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockImplementation((url: string | URL | Request, opts?: RequestInit) => {
+      const path = typeof url === "string" ? url : url.toString();
+      if (path.includes("/api/dashboard")) {
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          json: () => Promise.resolve(buildDashboardResponse()),
+        } as Response);
+      }
+      return Promise.resolve({ ok: false, status: 404, json: () => Promise.resolve({}) } as Response);
+    });
+
+    render(<DashboardPage />);
+
+    await waitFor(() => {
+      expect(fetchSpy).toHaveBeenCalled();
+    });
+
+    const callOpts = fetchSpy.mock.calls[0]![1] as RequestInit;
+    expect(callOpts.credentials).toBe("include");
+  });
+
+  it("includes Content-Type header in fetch request", async () => {
+    mockAuthenticatedSession();
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockImplementation((url: string | URL | Request) => {
+      const path = typeof url === "string" ? url : url.toString();
+      if (path.includes("/api/dashboard")) {
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          json: () => Promise.resolve(buildDashboardResponse()),
+        } as Response);
+      }
+      return Promise.resolve({ ok: false, status: 404, json: () => Promise.resolve({}) } as Response);
+    });
+
+    render(<DashboardPage />);
+
+    await waitFor(() => {
+      expect(fetchSpy).toHaveBeenCalled();
+    });
+
+    const callOpts = fetchSpy.mock.calls[0]![1] as RequestInit;
+    const headers = callOpts.headers as Record<string, string>;
+    expect(headers["Content-Type"]).toBe("application/json");
+  });
+
+  it("includes X-CSRF-Token header when cookie is present", async () => {
+    mockAuthenticatedSession();
+    Object.defineProperty(document, "cookie", {
+      writable: true,
+      value: "csrfToken=my-csrf-token",
+    });
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockImplementation((url: string | URL | Request) => {
+      const path = typeof url === "string" ? url : url.toString();
+      if (path.includes("/api/dashboard")) {
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          json: () => Promise.resolve(buildDashboardResponse()),
+        } as Response);
+      }
+      return Promise.resolve({ ok: false, status: 404, json: () => Promise.resolve({}) } as Response);
+    });
+
+    render(<DashboardPage />);
+
+    await waitFor(() => {
+      expect(fetchSpy).toHaveBeenCalled();
+    });
+
+    const callOpts = fetchSpy.mock.calls[0]![1] as RequestInit;
+    const headers = callOpts.headers as Record<string, string>;
+    expect(headers["X-CSRF-Token"]).toBe("my-csrf-token");
+
+    Object.defineProperty(document, "cookie", { writable: true, value: "" });
+  });
+});
+
+describe("DashboardPage - auth guard redirect behavior", () => {
+  it("uses router.replace (not push) to prevent back navigation to dashboard", async () => {
+    mockUnauthenticatedSession();
+    vi.spyOn(globalThis, "fetch").mockReturnValue(new Promise(() => {}));
+
+    render(<DashboardPage />);
+
+    await waitFor(() => {
+      expect(mockRouter.replace).toHaveBeenCalledWith("/login");
+    });
+
+    expect(mockRouter.push).not.toHaveBeenCalled();
+  });
+
+  it("redirects exactly once for unauthenticated session", async () => {
+    mockUnauthenticatedSession();
+    vi.spyOn(globalThis, "fetch").mockReturnValue(new Promise(() => {}));
+
+    render(<DashboardPage />);
+
+    await waitFor(() => {
+      expect(mockRouter.replace).toHaveBeenCalled();
+    });
+
+    expect(mockRouter.replace).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not redirect on 403 forbidden response", async () => {
+    mockAuthenticatedSession();
+    vi.spyOn(globalThis, "fetch").mockImplementation(() =>
+      Promise.resolve({
+        ok: false,
+        status: 403,
+        statusText: "Forbidden",
+        json: () => Promise.resolve({ error: "Access denied" }),
+      } as Response)
+    );
+
+    render(<DashboardPage />);
+
+    await waitFor(() => {
+      expect(screen.getByText("Access denied")).toBeInTheDocument();
+    });
+
+    expect(mockRouter.replace).not.toHaveBeenCalled();
+  });
+
+  it("does not redirect on 500 server error", async () => {
+    mockAuthenticatedSession();
+    vi.spyOn(globalThis, "fetch").mockImplementation(() =>
+      Promise.resolve({
+        ok: false,
+        status: 500,
+        statusText: "Internal Server Error",
+        json: () => Promise.resolve({ error: "Server error" }),
+      } as Response)
+    );
+
+    render(<DashboardPage />);
+
+    await waitFor(() => {
+      expect(screen.getByText("Server error")).toBeInTheDocument();
+    });
+
+    expect(mockRouter.replace).not.toHaveBeenCalled();
+  });
+});
+
+describe("DashboardPage - data integrity with auth", () => {
+  it("clears error state on retry after successful fetch", async () => {
+    mockAuthenticatedSession();
+
+    vi.spyOn(globalThis, "fetch")
+      .mockRejectedValueOnce(new Error("Network error"))
+      .mockImplementationOnce(() =>
+        Promise.resolve({
+          ok: true,
+          status: 200,
+          json: () => Promise.resolve(buildDashboardResponse({
+            deals: mockDeals,
+            deliverables: [],
+            payments: [],
+          })),
+        } as Response)
+      );
+
+    render(<DashboardPage />);
+
+    await waitFor(() => {
+      expect(screen.getByText("Network error")).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByText("Try again"));
+
+    await waitFor(() => {
+      expect(screen.queryByText("Network error")).not.toBeInTheDocument();
+    });
+  });
+
+  it("does not show stale data after auth failure error", async () => {
+    mockAuthenticatedSession();
+    vi.spyOn(globalThis, "fetch").mockImplementation(() =>
+      Promise.resolve({
+        ok: false,
+        status: 401,
+        statusText: "Unauthorized",
+        json: () => Promise.resolve({ error: "Unauthorized" }),
+      } as Response)
+    );
+
+    render(<DashboardPage />);
+
+    await waitFor(() => {
+      expect(screen.getByText("Unauthorized")).toBeInTheDocument();
+    });
+
+    expect(screen.queryByText("Active Deals")).not.toBeInTheDocument();
+    expect(screen.queryByText("Deal Pipeline")).not.toBeInTheDocument();
+  });
+});

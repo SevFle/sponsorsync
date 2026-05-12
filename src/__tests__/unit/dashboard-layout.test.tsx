@@ -24,7 +24,7 @@ vi.mock("next/navigation", () => ({
 import { getServerSession } from "next-auth";
 import { redirect } from "next/navigation";
 
-const mockSession = { user: { id: "user-1", email: "test@test.com" } };
+const mockSession = { user: { id: "user-1", email: "test@test.com", name: "Test User" } };
 
 function mockAuth(session: typeof mockSession | null) {
   (getServerSession as ReturnType<typeof vi.fn>).mockResolvedValue(session);
@@ -34,7 +34,7 @@ beforeEach(() => {
   vi.clearAllMocks();
 });
 
-describe("DashboardLayout", () => {
+describe("DashboardLayout - auth redirect", () => {
   it("redirects to /login when not authenticated", async () => {
     mockAuth(null);
     const { default: DashboardLayout } = await import("@/app/(dashboard)/layout");
@@ -54,7 +54,69 @@ describe("DashboardLayout", () => {
     expect(result).toBeDefined();
   });
 
-  it("renders nav with SponsorSync heading and children when authenticated", async () => {
+  it("allows session with user object but no id (passes null check)", async () => {
+    mockAuth({ user: {} } as any);
+    const { default: DashboardLayout } = await import("@/app/(dashboard)/layout");
+
+    const result = await DashboardLayout({ children: <div>test</div> });
+    expect(redirect).not.toHaveBeenCalled();
+    expect(result).toBeDefined();
+  });
+
+  it("redirects when session is explicitly undefined", async () => {
+    mockAuth(undefined as any);
+    const { default: DashboardLayout } = await import("@/app/(dashboard)/layout");
+
+    await expect(
+      DashboardLayout({ children: <div>test</div> })
+    ).rejects.toThrow("NEXT_REDIRECT");
+  });
+
+  it("calls getServerSession with authOptions", async () => {
+    mockAuth(mockSession);
+    const { default: DashboardLayout } = await import("@/app/(dashboard)/layout");
+
+    await DashboardLayout({ children: <div>test</div> });
+
+    expect(getServerSession).toHaveBeenCalledWith({});
+  });
+
+  it("calls getServerSession exactly once per render", async () => {
+    mockAuth(mockSession);
+    const { default: DashboardLayout } = await import("@/app/(dashboard)/layout");
+
+    await DashboardLayout({ children: <div>test</div> });
+
+    expect(getServerSession).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("DashboardLayout - getServerSession error handling", () => {
+  it("throws when getServerSession rejects", async () => {
+    (getServerSession as ReturnType<typeof vi.fn>).mockRejectedValue(
+      new Error("Database connection failed")
+    );
+    const { default: DashboardLayout } = await import("@/app/(dashboard)/layout");
+
+    await expect(
+      DashboardLayout({ children: <div>test</div> })
+    ).rejects.toThrow("Database connection failed");
+  });
+
+  it("throws when getServerSession returns a promise that rejects with timeout", async () => {
+    (getServerSession as ReturnType<typeof vi.fn>).mockRejectedValue(
+      new Error("Session lookup timed out")
+    );
+    const { default: DashboardLayout } = await import("@/app/(dashboard)/layout");
+
+    await expect(
+      DashboardLayout({ children: <div>test</div> })
+    ).rejects.toThrow("Session lookup timed out");
+  });
+});
+
+describe("DashboardLayout - rendering when authenticated", () => {
+  it("renders nav with SponsorSync heading and children", async () => {
     mockAuth(mockSession);
     const { default: DashboardLayout } = await import("@/app/(dashboard)/layout");
 
@@ -80,15 +142,6 @@ describe("DashboardLayout", () => {
     expect(screen.getByTestId("child")).toBeInTheDocument();
   });
 
-  it("redirects when session has no user id", async () => {
-    mockAuth({ user: {} } as any);
-    const { default: DashboardLayout } = await import("@/app/(dashboard)/layout");
-
-    await expect(
-      DashboardLayout({ children: <div>test</div> })
-    ).resolves.toBeDefined();
-  });
-
   it("renders all navigation links", async () => {
     mockAuth(mockSession);
     const { default: DashboardLayout } = await import("@/app/(dashboard)/layout");
@@ -109,5 +162,103 @@ describe("DashboardLayout", () => {
     expect(hrefs).toContain("/dashboard/templates");
     expect(hrefs).toContain("/dashboard/integrations");
     expect(hrefs).toContain("/dashboard/settings");
+  });
+
+  it("renders navigation with correct link count", async () => {
+    mockAuth(mockSession);
+    const { default: DashboardLayout } = await import("@/app/(dashboard)/layout");
+
+    const result = await DashboardLayout({
+      children: <div>test</div>,
+    });
+
+    const { container } = render(result as React.ReactElement);
+    const links = container.querySelectorAll("a");
+    expect(links.length).toBe(8);
+  });
+
+  it("renders children in main element", async () => {
+    mockAuth(mockSession);
+    const { default: DashboardLayout } = await import("@/app/(dashboard)/layout");
+
+    const result = await DashboardLayout({
+      children: <div data-testid="main-child">Main Content</div>,
+    });
+
+    const { container } = render(result as React.ReactElement);
+    const main = container.querySelector("main");
+    expect(main).toBeInTheDocument();
+    expect(screen.getByTestId("main-child")).toBeInTheDocument();
+  });
+
+  it("renders nav element with correct structure", async () => {
+    mockAuth(mockSession);
+    const { default: DashboardLayout } = await import("@/app/(dashboard)/layout");
+
+    const result = await DashboardLayout({
+      children: <div>test</div>,
+    });
+
+    const { container } = render(result as React.ReactElement);
+    const nav = container.querySelector("nav");
+    expect(nav).toBeInTheDocument();
+    expect(nav?.querySelector("h2")?.textContent).toBe("SponsorSync");
+  });
+});
+
+describe("DashboardLayout - session variations", () => {
+  it("allows session with name and email", async () => {
+    mockAuth({ user: { id: "user-1", email: "admin@test.com", name: "Admin User" } });
+    const { default: DashboardLayout } = await import("@/app/(dashboard)/layout");
+
+    const result = await DashboardLayout({ children: <div>test</div> });
+    expect(redirect).not.toHaveBeenCalled();
+    expect(result).toBeDefined();
+  });
+
+  it("allows session with minimal user data", async () => {
+    mockAuth({ user: { id: "u" } } as any);
+    const { default: DashboardLayout } = await import("@/app/(dashboard)/layout");
+
+    const result = await DashboardLayout({ children: <div>test</div> });
+    expect(redirect).not.toHaveBeenCalled();
+    expect(result).toBeDefined();
+  });
+
+  it("allows session with extra fields", async () => {
+    mockAuth({ user: { id: "user-1", email: "test@test.com", role: "admin" } } as any);
+    const { default: DashboardLayout } = await import("@/app/(dashboard)/layout");
+
+    const result = await DashboardLayout({ children: <div>test</div> });
+    expect(redirect).not.toHaveBeenCalled();
+    expect(result).toBeDefined();
+  });
+});
+
+describe("DashboardLayout - layout structure", () => {
+  it("uses flex layout with min-h-screen", async () => {
+    mockAuth(mockSession);
+    const { default: DashboardLayout } = await import("@/app/(dashboard)/layout");
+
+    const result = await DashboardLayout({
+      children: <div>test</div>,
+    });
+
+    const { container } = render(result as React.ReactElement);
+    const wrapper = container.querySelector(".flex.min-h-screen");
+    expect(wrapper).toBeInTheDocument();
+  });
+
+  it("renders sidebar with fixed width", async () => {
+    mockAuth(mockSession);
+    const { default: DashboardLayout } = await import("@/app/(dashboard)/layout");
+
+    const result = await DashboardLayout({
+      children: <div>test</div>,
+    });
+
+    const { container } = render(result as React.ReactElement);
+    const nav = container.querySelector("nav.w-64");
+    expect(nav).toBeInTheDocument();
   });
 });
