@@ -1,5 +1,4 @@
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth/config";
+import { getServerSessionOrNull } from "@/lib/auth/guard";
 import { redirect } from "next/navigation";
 import { AuthProvider } from "@/components/providers/auth-provider";
 
@@ -8,7 +7,7 @@ export default async function DashboardLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const session = await getServerSession(authOptions);
+  const session = await getServerSessionOrNull();
   if (!session) {
     redirect("/login");
   }

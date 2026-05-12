@@ -1,200 +1,46 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { format, formatDistanceToNow, differenceInDays, isPast, isFuture, startOfDay } from "date-fns";
+import { formatDistanceToNow, isFuture } from "date-fns";
 import { PageHeader } from "@/components/ui/page-header";
-import { StatusBadge, type DealStatus } from "@/components/ui/status-badge";
-import { Skeleton } from "@/components/ui/skeleton";
+import { StatusBadge } from "@/components/ui/status-badge";
+import { MetricCard } from "@/components/dashboard/metric-card";
+import { DeadlineRow } from "@/components/dashboard/deadline-row";
+import { ActivityRow } from "@/components/dashboard/activity-row";
+import { DashboardSkeleton } from "@/components/dashboard/dashboard-skeleton";
+import { ErrorBanner } from "@/components/dashboard/error-banner";
 import { apiFetch } from "@/lib/api-client";
+import { formatCurrency } from "@/lib/format";
 import { useAuth } from "@/hooks/use-auth";
+import type { DashboardData, DashboardDeliverable, DashboardPayment } from "@/types/dashboard";
 
-interface Deal {
-  id: string;
-  sponsorName: string;
-  title: string;
-  status: DealStatus;
-  totalValue: number | null;
-  currency: string;
-  endDate: string | null;
+const DEFAULT_METRICS: DashboardData["metrics"] = {
+  activeDeals: 0,
+  draftDeals: 0,
+  completedDeals: 0,
+  revenueMtd: 0,
+  pendingDeliverables: 0,
+  overduePayments: 0,
+};
+
+function getUpcomingDeliverables(deliverables: DashboardDeliverable[]) {
+  return deliverables
+    .filter((d) => d.dueDate && isFuture(new Date(d.dueDate)) && d.status !== "verified" && d.status !== "missed")
+    .sort((a, b) => new Date(a.dueDate!).getTime() - new Date(b.dueDate!).getTime())
+    .slice(0, 5);
 }
 
-interface Deliverable {
-  id: string;
-  title: string;
-  dueDate: string | null;
-  status: string;
-  dealTitle?: string;
-  sponsorName?: string;
-}
+function getRecentActivity(payments: DashboardPayment[]) {
+  const recent = [...payments]
+    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+    .slice(0, 5);
 
-interface Payment {
-  id: string;
-  amount: number;
-  currency: string;
-  status: string;
-  dueDate: string | null;
-  paidDate: string | null;
-  createdAt: string;
-  dealTitle?: string;
-  sponsorName?: string;
-}
-
-interface DashboardData {
-  deals: Deal[];
-  deliverables: Deliverable[];
-  payments: Payment[];
-  metrics: {
-    activeDeals: number;
-    draftDeals: number;
-    completedDeals: number;
-    revenueMtd: number;
-    pendingDeliverables: number;
-    overduePayments: number;
-  };
-}
-
-function formatCurrency(amount: number, currency: string) {
-  return new Intl.NumberFormat("en-US", {
-    style: "currency",
-    currency,
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 0,
-  }).format(amount);
-}
-
-function MetricCard({
-  label,
-  value,
-  accentColor,
-}: {
-  label: string;
-  value: string | number;
-  accentColor: string;
-}) {
-  return (
-    <div className="overflow-hidden rounded-lg border border-gray-200 bg-gray-50">
-      <div className={`h-1 ${accentColor}`} />
-      <div className="px-4 py-3">
-        <p className="text-xs text-gray-500">{label}</p>
-        <p className="mt-1 text-2xl font-bold text-gray-900">{value}</p>
-      </div>
-    </div>
-  );
-}
-
-function DeadlineRow({ deliverable }: { deliverable: Deliverable }) {
-  if (!deliverable.dueDate) return null;
-
-  const date = new Date(deliverable.dueDate);
-  const daysUntil = differenceInDays(startOfDay(date), startOfDay(new Date()));
-  const overdue = isPast(date);
-
-  let dotColor = "bg-blue-500";
-  if (overdue) dotColor = "bg-red-500";
-  else if (daysUntil <= 3) dotColor = "bg-amber-500";
-
-  return (
-    <div className="flex items-center gap-3 rounded-lg border border-gray-200 bg-gray-50 px-4 py-3">
-      <div className={`h-2.5 w-2.5 shrink-0 rounded-full ${dotColor}`} />
-      <div className="min-w-0 flex-1">
-        <p className="truncate text-sm font-medium text-gray-900">{deliverable.title}</p>
-        <p className="truncate text-xs text-gray-500">{deliverable.sponsorName}</p>
-      </div>
-      <span className="shrink-0 text-xs text-gray-500">
-        {overdue
-          ? `Overdue (${Math.abs(daysUntil)}d)`
-          : daysUntil === 0
-            ? "Today"
-            : `${daysUntil}d left`}
-      </span>
-    </div>
-  );
-}
-
-function ActivityRow({
-  type,
-  title,
-  subtitle,
-  timeAgo,
-}: {
-  type: string;
-  title: string;
-  subtitle: string;
-  timeAgo: string;
-}) {
-  return (
-    <div className="rounded border border-gray-100 bg-gray-50 px-4 py-3">
-      <div className="flex items-start justify-between gap-2">
-        <div className="min-w-0">
-          <p className="text-sm font-semibold text-gray-900">{title}</p>
-          <p className="truncate text-xs text-gray-500">{subtitle}</p>
-        </div>
-        <span className="shrink-0 text-xs text-gray-400">{timeAgo}</span>
-      </div>
-    </div>
-  );
-}
-
-function DashboardSkeleton() {
-  return (
-    <div className="space-y-8">
-      <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-        {Array.from({ length: 4 }).map((_, i) => (
-          <div key={i} className="overflow-hidden rounded-lg border border-gray-200">
-            <Skeleton className="h-1 w-full" />
-            <div className="px-4 py-3">
-              <Skeleton className="h-3 w-24" />
-              <Skeleton className="mt-2 h-7 w-16" />
-            </div>
-          </div>
-        ))}
-      </div>
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-        <div className="lg:col-span-2">
-          <Skeleton className="mb-3 h-3 w-36" />
-          <div className="space-y-2">
-            {Array.from({ length: 4 }).map((_, i) => (
-              <div key={i} className="rounded-lg border border-gray-200 px-4 py-3">
-                <div className="flex items-center gap-3">
-                  <Skeleton className="h-2.5 w-2.5 rounded-full" />
-                  <div className="flex-1 space-y-1">
-                    <Skeleton className="h-4 w-48" />
-                    <Skeleton className="h-3 w-24" />
-                  </div>
-                  <Skeleton className="h-3 w-16" />
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-        <div>
-          <Skeleton className="mb-3 h-3 w-32" />
-          <div className="space-y-2">
-            {Array.from({ length: 4 }).map((_, i) => (
-              <div key={i} className="rounded border border-gray-100 px-4 py-3">
-                <Skeleton className="h-4 w-32" />
-                <Skeleton className="mt-1 h-3 w-40" />
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function ErrorBanner({ message, onRetry }: { message: string; onRetry: () => void }) {
-  return (
-    <div className="rounded-lg border border-red-200 bg-red-50 p-4 text-center">
-      <p className="text-sm font-medium text-red-800">{message}</p>
-      <button
-        onClick={onRetry}
-        className="mt-2 inline-flex items-center rounded-md bg-red-600 px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-red-700"
-      >
-        Try again
-      </button>
-    </div>
-  );
+  return recent.map((p) => ({
+    type: p.status === "paid" ? "payment" : "pending_payment",
+    title: p.status === "paid" ? "Payment received" : "Payment pending",
+    subtitle: `${p.sponsorName ?? "Unknown"} \u2014 ${formatCurrency(p.amount, p.currency ?? "USD")}`,
+    timeAgo: formatDistanceToNow(new Date(p.createdAt), { addSuffix: true }),
+  }));
 }
 
 export default function DashboardPage() {
@@ -229,30 +75,10 @@ export default function DashboardPage() {
   const deals = data?.deals ?? [];
   const deliverables = data?.deliverables ?? [];
   const payments = data?.payments ?? [];
-  const metrics = data?.metrics ?? {
-    activeDeals: 0,
-    draftDeals: 0,
-    completedDeals: 0,
-    revenueMtd: 0,
-    pendingDeliverables: 0,
-    overduePayments: 0,
-  };
+  const metrics = data?.metrics ?? DEFAULT_METRICS;
 
-  const upcomingDeliverables = deliverables
-    .filter((d) => d.dueDate && isFuture(new Date(d.dueDate)) && d.status !== "verified" && d.status !== "missed")
-    .sort((a, b) => new Date(a.dueDate!).getTime() - new Date(b.dueDate!).getTime())
-    .slice(0, 5);
-
-  const recentPayments = [...payments]
-    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
-    .slice(0, 5);
-
-  const recentActivity = recentPayments.map((p) => ({
-    type: p.status === "paid" ? "payment" : "pending_payment",
-    title: p.status === "paid" ? "Payment received" : "Payment pending",
-    subtitle: `${p.sponsorName ?? "Unknown"} \u2014 ${formatCurrency(p.amount, p.currency ?? "USD")}`,
-    timeAgo: formatDistanceToNow(new Date(p.createdAt), { addSuffix: true }),
-  }));
+  const upcomingDeliverables = getUpcomingDeliverables(deliverables);
+  const recentActivity = getRecentActivity(payments);
 
   if (loading) {
     return (
