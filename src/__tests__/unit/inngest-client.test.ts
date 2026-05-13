@@ -18,6 +18,21 @@ vi.mock("@/lib/inngest/payment-follower", () => ({
   }),
 }));
 
+vi.mock("@/lib/inngest/deliverable-verifier", () => ({
+  processDeliverableVerification: vi.fn().mockResolvedValue({
+    usersProcessed: 0,
+    notificationsSent: 0,
+    emailsSent: 0,
+    totalChecked: 0,
+    passed: 0,
+    failed: 0,
+    pending: 0,
+    overdueAlerts: 0,
+    reports: [],
+    errors: [],
+  }),
+}));
+
 import {
   inngest,
   deadlineReminderFunction,
@@ -26,6 +41,7 @@ import {
 } from "@/lib/inngest/client";
 import { processDeadlineChecks } from "@/lib/inngest/deadline-checker";
 import { processPaymentFollowUps } from "@/lib/inngest/payment-follower";
+import { processDeliverableVerification } from "@/lib/inngest/deliverable-verifier";
 
 describe("inngest client", () => {
   it("creates inngest client with correct id", () => {
@@ -97,11 +113,17 @@ describe("deliverableVerificationFunction", () => {
     expect(opts).toBeDefined();
   });
 
-  it("step.run calls processDeadlineChecks", async () => {
-    (processDeadlineChecks as ReturnType<typeof vi.fn>).mockResolvedValue({
+  it("step.run calls processDeliverableVerification", async () => {
+    (processDeliverableVerification as ReturnType<typeof vi.fn>).mockResolvedValue({
       usersProcessed: 0,
-      notificationsCreated: 0,
+      notificationsSent: 0,
       emailsSent: 0,
+      totalChecked: 0,
+      passed: 0,
+      failed: 0,
+      pending: 0,
+      overdueAlerts: 0,
+      reports: [],
       errors: [],
     });
 
@@ -113,6 +135,7 @@ describe("deliverableVerificationFunction", () => {
       "verify-deliverables",
       expect.any(Function)
     );
+    expect(processDeliverableVerification).toHaveBeenCalled();
   });
 });
 

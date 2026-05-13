@@ -1,6 +1,7 @@
 import { Inngest } from "inngest";
 import { processDeadlineChecks } from "./deadline-checker";
 import { processPaymentFollowUps } from "./payment-follower";
+import { processDeliverableVerification } from "./deliverable-verifier";
 
 export const inngest: Inngest = new Inngest({
   id: "sponsorsync",
@@ -22,7 +23,7 @@ export const deliverableVerificationFunction = inngest.createFunction(
   { cron: "0 */6 * * *" },
   async ({ step }) => {
     await step.run("verify-deliverables", async () => {
-      return processDeadlineChecks();
+      return processDeliverableVerification();
     });
   }
 );
