@@ -1,27 +1,17 @@
-"use client";
-
-import { useState, useEffect, useCallback } from "react";
+import { getAuthenticatedSession } from "@/lib/auth/guard";
+import { redirect } from "next/navigation";
 import { formatDistanceToNow, isFuture } from "date-fns";
 import { PageHeader } from "@/components/ui/page-header";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { MetricCard } from "@/components/dashboard/metric-card";
 import { DeadlineRow } from "@/components/dashboard/deadline-row";
 import { ActivityRow } from "@/components/dashboard/activity-row";
-import { DashboardSkeleton } from "@/components/dashboard/dashboard-skeleton";
-import { ErrorBanner } from "@/components/dashboard/error-banner";
-import { apiFetch } from "@/lib/api-client";
 import { formatCurrency } from "@/lib/format";
-import { useAuth } from "@/hooks/use-auth";
-import type { DashboardData, DashboardDeliverable, DashboardPayment } from "@/types/dashboard";
-
-const DEFAULT_METRICS: DashboardData["metrics"] = {
-  activeDeals: 0,
-  draftDeals: 0,
-  completedDeals: 0,
-  revenueMtd: 0,
-  pendingDeliverables: 0,
-  overduePayments: 0,
-};
+import { getDealsByUserId } from "@/lib/db/queries/deals";
+import { getDeliverablesByUserId } from "@/lib/db/queries/deliverables";
+import { getPaymentsByUserId } from "@/lib/db/queries/payments";
+import { computeDashboardMetrics } from "@/lib/dashboard/metrics";
+import type { DashboardDeliverable, DashboardPayment } from "@/types/dashboard";
 
 function getUpcomingDeliverables(deliverables: DashboardDeliverable[]) {
   return deliverables
@@ -43,64 +33,29 @@ function getRecentActivity(payments: DashboardPayment[]) {
   }));
 }
 
-export default function DashboardPage() {
-  const { isAuthenticated } = useAuth();
-  const [data, setData] = useState<DashboardData | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-
-  const fetchDashboardData = useCallback(async (signal?: AbortSignal) => {
-    try {
-      setLoading(true);
-      setError(null);
-
-      const result = await apiFetch<DashboardData>("/api/dashboard", { signal });
-      setData(result);
-    } catch (err) {
-      if (signal?.aborted) return;
-      setError(err instanceof Error ? err.message : "Something went wrong");
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    if (!isAuthenticated) return;
-
-    const controller = new AbortController();
-    fetchDashboardData(controller.signal);
-    return () => controller.abort();
-  }, [fetchDashboardData, isAuthenticated]);
-
-  const deals = data?.deals ?? [];
-  const deliverables = data?.deliverables ?? [];
-  const payments = data?.payments ?? [];
-  const metrics = data?.metrics ?? DEFAULT_METRICS;
-
-  const upcomingDeliverables = getUpcomingDeliverables(deliverables);
-  const recentActivity = getRecentActivity(payments);
-
-  if (loading) {
-    return (
-      <div>
-        <PageHeader title="Dashboard" description="Overview of your sponsorship activity." />
-        <div className="mt-6">
-          <DashboardSkeleton />
-        </div>
-      </div>
-    );
+export default async function DashboardPage() {
+  const session = await getAuthenticatedSession();
+  if (!session) {
+    redirect("/login");
   }
 
-  if (error) {
-    return (
-      <div>
-        <PageHeader title="Dashboard" description="Overview of your sponsorship activity." />
-        <div className="mt-6">
-          <ErrorBanner message={error} onRetry={() => fetchDashboardData()} />
-        </div>
-      </div>
-    );
-  }
+  const userId = session.user.id;
+
+  const [deals, deliverables, payments] = await Promise.all([
+    getDealsByUserId(userId),
+    getDeliverablesByUserId(userId),
+    getPaymentsByUserId(userId),
+  ]);
+
+  const metrics = computeDashboardMetrics(deals, deliverables, payments);
+
+  const upcomingDeliverables = getUpcomingDeliverables(deliverables as DashboardDeliverable[]);
+  const recentActivity = getRecentActivity(
+    payments.map((p) => ({
+      ...p,
+      createdAt: p.createdAt instanceof Date ? p.createdAt.toISOString() : String(p.createdAt),
+    })) as DashboardPayment[]
+  );
 
   return (
     <div>

@@ -1,21 +1,39 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { render, screen, fireEvent, waitFor, act } from "@testing-library/react";
-import DashboardPage from "@/app/(dashboard)/page";
+import { describe, it, expect, vi, beforeEach } from "vitest";
+import { render, screen, waitFor } from "@testing-library/react";
 
-const mockRouter = {
-  push: vi.fn(),
-  replace: vi.fn(),
-};
-
-vi.mock("next-auth/react", () => ({
-  useSession: vi.fn(),
+vi.mock("@/lib/auth/guard", () => ({
+  getAuthenticatedSession: vi.fn(),
 }));
 
 vi.mock("next/navigation", () => ({
-  useRouter: () => mockRouter,
+  redirect: vi.fn(() => {
+    throw new Error("NEXT_REDIRECT");
+  }),
 }));
 
-import { useSession } from "next-auth/react";
+vi.mock("@/lib/db/queries/deals", () => ({
+  getDealsByUserId: vi.fn(),
+}));
+
+vi.mock("@/lib/db/queries/deliverables", () => ({
+  getDeliverablesByUserId: vi.fn(),
+}));
+
+vi.mock("@/lib/db/queries/payments", () => ({
+  getPaymentsByUserId: vi.fn(),
+}));
+
+import { getAuthenticatedSession } from "@/lib/auth/guard";
+import { redirect } from "next/navigation";
+import { getDealsByUserId } from "@/lib/db/queries/deals";
+import { getDeliverablesByUserId } from "@/lib/db/queries/deliverables";
+import { getPaymentsByUserId } from "@/lib/db/queries/payments";
+
+const mockSession = { user: { id: "user-1", email: "test@test.com", name: "Test User" } };
+
+function mockAuth(session: typeof mockSession | null) {
+  (getAuthenticatedSession as ReturnType<typeof vi.fn>).mockResolvedValue(session);
+}
 
 const futureDate = (daysFromNow: number) => {
   const d = new Date();
@@ -130,272 +148,105 @@ const mockPayments = [
   },
 ];
 
-function mockAuthenticatedSession() {
-  (useSession as ReturnType<typeof vi.fn>).mockReturnValue({
-    data: { user: { id: "user-1", email: "test@test.com" } },
-    status: "authenticated",
-  });
-}
-
-function mockUnauthenticatedSession() {
-  (useSession as ReturnType<typeof vi.fn>).mockReturnValue({
-    data: null,
-    status: "unauthenticated",
-  });
-}
-
-function mockLoadingSession() {
-  (useSession as ReturnType<typeof vi.fn>).mockReturnValue({
-    data: null,
-    status: "loading",
-  });
+function mockDbQueries(overrides: Partial<{
+  deals: any[];
+  deliverables: any[];
+  payments: any[];
+}> = {}) {
+  (getDealsByUserId as ReturnType<typeof vi.fn>).mockResolvedValue(overrides.deals ?? []);
+  (getDeliverablesByUserId as ReturnType<typeof vi.fn>).mockResolvedValue(overrides.deliverables ?? []);
+  (getPaymentsByUserId as ReturnType<typeof vi.fn>).mockResolvedValue(overrides.payments ?? []);
 }
 
 beforeEach(() => {
-  vi.restoreAllMocks();
-  mockRouter.push.mockClear();
-  mockRouter.replace.mockClear();
-  mockAuthenticatedSession();
+  vi.clearAllMocks();
+  mockAuth(mockSession);
 });
 
-afterEach(() => {
-  vi.restoreAllMocks();
-});
+describe("DashboardPage - server-side auth guard", () => {
+  it("redirects to /login when not authenticated", async () => {
+    mockAuth(null);
+    const { default: DashboardPage } = await import("@/app/(dashboard)/page");
 
-interface TestDeal {
-  id: string;
-  sponsorName: string;
-  title: string;
-  status: string;
-  totalValue: number | null;
-  currency: string;
-  endDate: string | null;
-}
-
-interface TestDeliverable {
-  id: string;
-  title: string;
-  dueDate: string | null;
-  status: string;
-  sponsorName: string;
-}
-
-interface TestPayment {
-  id: string;
-  amount: number;
-  currency: string;
-  status: string;
-  dueDate: string | null;
-  paidDate: string | null;
-  createdAt: string;
-  sponsorName: string;
-}
-
-function buildDashboardResponse(overrides: Partial<{
-  deals: TestDeal[];
-  deliverables: TestDeliverable[];
-  payments: TestPayment[];
-  metrics: Record<string, number>;
-}> = {}) {
-  const deals = overrides.deals ?? [];
-  const deliverables = overrides.deliverables ?? [];
-  const payments = overrides.payments ?? [];
-
-  const metrics = overrides.metrics ?? {
-    activeDeals: deals.filter((d) => d.status === "active").length,
-    draftDeals: deals.filter((d) => d.status === "draft").length,
-    completedDeals: deals.filter((d) => d.status === "completed").length,
-    revenueMtd: payments
-      .filter((p) => p.status === "paid" && p.paidDate)
-      .reduce((sum, p) => sum + p.amount, 0),
-    pendingDeliverables: deliverables.filter(
-      (d) => d.status === "pending" || d.status === "in_progress"
-    ).length,
-    overduePayments: payments.filter(
-      (p) =>
-        p.status === "overdue" ||
-        (p.status === "pending" && p.dueDate && new Date(p.dueDate) < new Date())
-    ).length,
-  };
-
-  return { deals, deliverables, payments, metrics };
-}
-
-function mockDashboardFetch(data: ReturnType<typeof buildDashboardResponse>) {
-  return vi.spyOn(globalThis, "fetch").mockImplementation((url: string | URL | Request) => {
-    const path = typeof url === "string" ? url : url.toString();
-    if (path.includes("/api/dashboard")) {
-      return Promise.resolve({
-        ok: true,
-        status: 200,
-        json: () => Promise.resolve(data),
-      } as Response);
-    }
-    return Promise.resolve({
-      ok: false,
-      status: 404,
-      json: () => Promise.resolve({}),
-    } as Response);
-  });
-}
-
-function mockFetchError() {
-  vi.spyOn(globalThis, "fetch").mockRejectedValueOnce(new Error("Network error"));
-}
-
-function mockFetchNonOk() {
-  vi.spyOn(globalThis, "fetch").mockImplementation(() =>
-    Promise.resolve({
-      ok: false,
-      status: 500,
-      statusText: "Internal Server Error",
-      json: () => Promise.resolve({ error: "Failed to load dashboard data" }),
-    } as Response)
-  );
-}
-
-describe("DashboardPage - useSession auth guard", () => {
-  it("redirects to /login when session is unauthenticated", async () => {
-    mockUnauthenticatedSession();
-    vi.spyOn(globalThis, "fetch").mockReturnValue(new Promise(() => {}));
-
-    render(<DashboardPage />);
-
-    await waitFor(() => {
-      expect(mockRouter.replace).toHaveBeenCalledWith("/login");
-    });
+    await expect(DashboardPage()).rejects.toThrow("NEXT_REDIRECT");
+    expect(redirect).toHaveBeenCalledWith("/login");
   });
 
-  it("does not redirect when session is authenticated", async () => {
-    mockAuthenticatedSession();
-    mockDashboardFetch(buildDashboardResponse());
+  it("does not redirect when authenticated", async () => {
+    mockAuth(mockSession);
+    mockDbQueries();
+    const { default: DashboardPage } = await import("@/app/(dashboard)/page");
 
-    render(<DashboardPage />);
-
-    await waitFor(() => {
-      expect(screen.getByText("No upcoming deadlines")).toBeInTheDocument();
-    });
-
-    expect(mockRouter.replace).not.toHaveBeenCalled();
+    const result = await DashboardPage();
+    expect(redirect).not.toHaveBeenCalled();
+    expect(result).toBeDefined();
   });
 
-  it("shows loading skeleton when session is loading and does not fetch data", async () => {
-    mockLoadingSession();
-    const fetchSpy = vi.spyOn(globalThis, "fetch").mockReturnValue(new Promise(() => {}));
+  it("does not query database when unauthenticated", async () => {
+    mockAuth(null);
+    const { default: DashboardPage } = await import("@/app/(dashboard)/page");
 
-    const { container } = render(<DashboardPage />);
-
-    const skeletons = container.querySelectorAll(".animate-pulse");
-    expect(skeletons.length).toBeGreaterThan(0);
-    expect(fetchSpy).not.toHaveBeenCalled();
-    expect(mockRouter.replace).not.toHaveBeenCalled();
-  });
-
-  it("does not redirect during session loading", async () => {
-    mockLoadingSession();
-    vi.spyOn(globalThis, "fetch").mockReturnValue(new Promise(() => {}));
-
-    render(<DashboardPage />);
-
-    await act(async () => {
-      await new Promise((r) => setTimeout(r, 50));
-    });
-
-    expect(mockRouter.replace).not.toHaveBeenCalled();
-  });
-
-  it("only fetches data after session is authenticated", async () => {
-    const fetchSpy = mockDashboardFetch(buildDashboardResponse());
-
-    render(<DashboardPage />);
-
-    await waitFor(() => {
-      expect(screen.getByText("No upcoming deadlines")).toBeInTheDocument();
-    });
-
-    expect(fetchSpy).toHaveBeenCalledTimes(1);
+    await expect(DashboardPage()).rejects.toThrow("NEXT_REDIRECT");
+    expect(getDealsByUserId).not.toHaveBeenCalled();
+    expect(getDeliverablesByUserId).not.toHaveBeenCalled();
+    expect(getPaymentsByUserId).not.toHaveBeenCalled();
   });
 });
 
-describe("DashboardPage - credentials and fetch behavior", () => {
-  it("sends credentials: include in fetch request", async () => {
-    mockAuthenticatedSession();
-    const fetchSpy = vi.spyOn(globalThis, "fetch").mockImplementation((url: string | URL | Request, opts?: RequestInit) => {
-      const path = typeof url === "string" ? url : url.toString();
-      if (path.includes("/api/dashboard")) {
-        return Promise.resolve({
-          ok: true,
-          status: 200,
-          json: () => Promise.resolve(buildDashboardResponse()),
-        } as Response);
-      }
-      return Promise.resolve({ ok: false, status: 404, json: () => Promise.resolve({}) } as Response);
-    });
+describe("DashboardPage - server-side data fetching", () => {
+  it("queries deals, deliverables, and payments with userId", async () => {
+    mockDbQueries();
+    const { default: DashboardPage } = await import("@/app/(dashboard)/page");
 
-    render(<DashboardPage />);
+    await DashboardPage();
 
-    await waitFor(() => {
-      expect(fetchSpy).toHaveBeenCalled();
-    });
-
-    const callOpts = fetchSpy.mock.calls[0]![1] as RequestInit;
-    expect(callOpts.credentials).toBe("include");
+    expect(getDealsByUserId).toHaveBeenCalledWith("user-1");
+    expect(getDeliverablesByUserId).toHaveBeenCalledWith("user-1");
+    expect(getPaymentsByUserId).toHaveBeenCalledWith("user-1");
   });
 
-  it("uses single fetch call for all dashboard data (no cascading re-renders)", async () => {
-    mockAuthenticatedSession();
-    const fetchSpy = vi.spyOn(globalThis, "fetch").mockImplementation((url: string | URL | Request) => {
-      const path = typeof url === "string" ? url : url.toString();
-      if (path.includes("/api/dashboard")) {
-        return Promise.resolve({
-          ok: true,
-          status: 200,
-          json: () => Promise.resolve(buildDashboardResponse({
-            deals: mockDeals,
-            deliverables: mockDeliverables,
-            payments: mockPayments,
-          })),
-        } as Response);
-      }
-      return Promise.resolve({ ok: false, status: 404, json: () => Promise.resolve({}) } as Response);
+  it("queries all three data sources for authenticated user", async () => {
+    mockDbQueries({
+      deals: mockDeals,
+      deliverables: mockDeliverables,
+      payments: mockPayments,
     });
+    const { default: DashboardPage } = await import("@/app/(dashboard)/page");
 
-    render(<DashboardPage />);
+    await DashboardPage();
 
-    await waitFor(() => {
-      expect(screen.getByText("Active Deals")).toBeInTheDocument();
-    });
+    expect(getDealsByUserId).toHaveBeenCalledTimes(1);
+    expect(getDeliverablesByUserId).toHaveBeenCalledTimes(1);
+    expect(getPaymentsByUserId).toHaveBeenCalledTimes(1);
+  });
 
-    expect(fetchSpy).toHaveBeenCalledTimes(1);
-    expect(fetchSpy).toHaveBeenCalledWith(
-      expect.stringContaining("/api/dashboard"),
-      expect.anything()
-    );
+  it("passes correct userId from session to all queries", async () => {
+    const customSession = { user: { id: "custom-user-42", email: "custom@test.com", name: "Custom User" } };
+    mockAuth(customSession);
+    mockDbQueries();
+    const { default: DashboardPage } = await import("@/app/(dashboard)/page");
+
+    await DashboardPage();
+
+    expect(getDealsByUserId).toHaveBeenCalledWith("custom-user-42");
+    expect(getDeliverablesByUserId).toHaveBeenCalledWith("custom-user-42");
+    expect(getPaymentsByUserId).toHaveBeenCalledWith("custom-user-42");
   });
 });
 
 describe("DashboardPage - rendering", () => {
-  it("shows loading skeletons while fetching", () => {
-    mockAuthenticatedSession();
-    vi.spyOn(globalThis, "fetch").mockReturnValue(new Promise(() => {}));
-    const { container } = render(<DashboardPage />);
-    const skeletons = container.querySelectorAll(".animate-pulse");
-    expect(skeletons.length).toBeGreaterThan(0);
-  });
-
   it("renders all metric cards with correct values", async () => {
-    mockDashboardFetch(buildDashboardResponse({
+    mockDbQueries({
       deals: mockDeals,
       deliverables: mockDeliverables,
       payments: mockPayments,
-    }));
-
-    render(<DashboardPage />);
-
-    await waitFor(() => {
-      expect(screen.getByText("Active Deals")).toBeInTheDocument();
     });
+    const { default: DashboardPage } = await import("@/app/(dashboard)/page");
 
+    const result = await DashboardPage();
+    render(result as React.ReactElement);
+
+    expect(screen.getByText("Active Deals")).toBeInTheDocument();
     expect(screen.getByText("Revenue (MTD)")).toBeInTheDocument();
     expect(screen.getByText("Pending Deliverables")).toBeInTheDocument();
     expect(screen.getByText("Overdue Payments")).toBeInTheDocument();
@@ -403,63 +254,16 @@ describe("DashboardPage - rendering", () => {
     expect(screen.getByText("3")).toBeInTheDocument();
   });
 
-  it("computes active deals count correctly", async () => {
-    mockDashboardFetch(buildDashboardResponse({
-      deals: mockDeals,
-      deliverables: [],
-      payments: [],
-    }));
-
-    render(<DashboardPage />);
-
-    await waitFor(() => {
-      expect(screen.getByText("Active Deals")).toBeInTheDocument();
-    });
-
-    const metricCards = screen.getAllByText("1");
-    expect(metricCards.length).toBeGreaterThanOrEqual(1);
-  });
-
-  it("computes revenue MTD from paid payments", async () => {
-    mockDashboardFetch(buildDashboardResponse({
-      deals: [],
-      deliverables: [],
-      payments: mockPayments,
-    }));
-
-    render(<DashboardPage />);
-
-    await waitFor(() => {
-      expect(screen.getByText("Revenue (MTD)")).toBeInTheDocument();
-    });
-
-    expect(screen.getByText("$4,000")).toBeInTheDocument();
-  });
-
-  it("computes overdue payments count", async () => {
-    mockDashboardFetch(buildDashboardResponse({
-      deals: [],
-      deliverables: [],
-      payments: mockPayments,
-    }));
-
-    render(<DashboardPage />);
-
-    await waitFor(() => {
-      expect(screen.getByText("Overdue Payments")).toBeInTheDocument();
-    });
-
-    expect(screen.getByText("1")).toBeInTheDocument();
-  });
-
   it("renders upcoming deadlines section", async () => {
-    mockDashboardFetch(buildDashboardResponse({
+    mockDbQueries({
       deals: mockDeals,
       deliverables: mockDeliverables,
       payments: [],
-    }));
+    });
+    const { default: DashboardPage } = await import("@/app/(dashboard)/page");
 
-    render(<DashboardPage />);
+    const result = await DashboardPage();
+    render(result as React.ReactElement);
 
     await waitFor(() => {
       expect(screen.getByText("Episode 42 — Mid-roll Ad")).toBeInTheDocument();
@@ -470,13 +274,15 @@ describe("DashboardPage - rendering", () => {
   });
 
   it("excludes verified and missed deliverables from upcoming", async () => {
-    mockDashboardFetch(buildDashboardResponse({
+    mockDbQueries({
       deals: [],
       deliverables: mockDeliverables,
       payments: [],
-    }));
+    });
+    const { default: DashboardPage } = await import("@/app/(dashboard)/page");
 
-    render(<DashboardPage />);
+    const result = await DashboardPage();
+    render(result as React.ReactElement);
 
     await waitFor(() => {
       expect(screen.getByText("Upcoming Deadlines")).toBeInTheDocument();
@@ -487,13 +293,15 @@ describe("DashboardPage - rendering", () => {
   });
 
   it("renders recent activity from payments", async () => {
-    mockDashboardFetch(buildDashboardResponse({
+    mockDbQueries({
       deals: [],
       deliverables: [],
       payments: mockPayments,
-    }));
+    });
+    const { default: DashboardPage } = await import("@/app/(dashboard)/page");
 
-    render(<DashboardPage />);
+    const result = await DashboardPage();
+    render(result as React.ReactElement);
 
     await waitFor(() => {
       expect(screen.getAllByText("Payment received").length).toBe(2);
@@ -505,13 +313,15 @@ describe("DashboardPage - rendering", () => {
   });
 
   it("renders deal pipeline summary cards", async () => {
-    mockDashboardFetch(buildDashboardResponse({
+    mockDbQueries({
       deals: mockDeals,
       deliverables: [],
       payments: [],
-    }));
+    });
+    const { default: DashboardPage } = await import("@/app/(dashboard)/page");
 
-    render(<DashboardPage />);
+    const result = await DashboardPage();
+    render(result as React.ReactElement);
 
     await waitFor(() => {
       expect(screen.getByText("Deal Pipeline")).toBeInTheDocument();
@@ -523,9 +333,11 @@ describe("DashboardPage - rendering", () => {
   });
 
   it("renders quick action links", async () => {
-    mockDashboardFetch(buildDashboardResponse());
+    mockDbQueries();
+    const { default: DashboardPage } = await import("@/app/(dashboard)/page");
 
-    render(<DashboardPage />);
+    const result = await DashboardPage();
+    render(result as React.ReactElement);
 
     await waitFor(() => {
       expect(screen.getByText("New Deal")).toBeInTheDocument();
@@ -541,174 +353,17 @@ describe("DashboardPage - rendering", () => {
       "/dashboard/sponsors/new"
     );
   });
-});
-
-describe("DashboardPage - error handling", () => {
-  it("shows error state on fetch failure", async () => {
-    mockFetchError();
-    render(<DashboardPage />);
-
-    await waitFor(() => {
-      expect(screen.getByText("Network error")).toBeInTheDocument();
-    });
-    expect(screen.getByText("Try again")).toBeInTheDocument();
-  });
-
-  it("shows error state on non-ok response", async () => {
-    mockFetchNonOk();
-    render(<DashboardPage />);
-
-    await waitFor(() => {
-      expect(screen.getByText("Failed to load dashboard data")).toBeInTheDocument();
-    });
-  });
-
-  it("shows error state on 401 unauthorized", async () => {
-    vi.spyOn(globalThis, "fetch").mockImplementation(() =>
-      Promise.resolve({
-        ok: false,
-        status: 401,
-        statusText: "Unauthorized",
-        json: () => Promise.resolve({ error: "Unauthorized" }),
-      } as Response)
-    );
-
-    render(<DashboardPage />);
-
-    await waitFor(() => {
-      expect(screen.getByText("Unauthorized")).toBeInTheDocument();
-    });
-  });
-
-  it("shows generic error message when error has no message", async () => {
-    vi.spyOn(globalThis, "fetch").mockImplementation(() =>
-      Promise.reject("network failure")
-    );
-
-    render(<DashboardPage />);
-
-    await waitFor(() => {
-      expect(screen.getByText("Something went wrong")).toBeInTheDocument();
-    });
-  });
-
-  it("retries fetching when Try again is clicked", async () => {
-    mockFetchError();
-
-    mockDashboardFetch(buildDashboardResponse({
-      deals: mockDeals,
-      deliverables: [],
-      payments: [],
-    }));
-
-    render(<DashboardPage />);
-
-    await waitFor(() => {
-      expect(screen.getByText("Try again")).toBeInTheDocument();
-    });
-
-    fireEvent.click(screen.getByText("Try again"));
-
-    await waitFor(() => {
-      expect(screen.getByText("Deal Pipeline")).toBeInTheDocument();
-    });
-  });
-
-  it("does not set error state when fetch is aborted", async () => {
-    vi.spyOn(globalThis, "fetch").mockImplementation((_url, opts) => {
-      return new Promise((_resolve, reject) => {
-        (opts as RequestInit).signal?.addEventListener("abort", () => {
-          reject(new DOMException("The operation was aborted.", "AbortError"));
-        });
-      }) as Promise<Response>;
-    });
-
-    const { unmount, container } = render(<DashboardPage />);
-    await waitFor(() => {
-      expect(container.querySelectorAll(".animate-pulse").length).toBeGreaterThan(0);
-    });
-
-    unmount();
-
-    await waitFor(() => {
-      expect(screen.queryByText("Something went wrong")).not.toBeInTheDocument();
-    });
-  });
-});
-
-describe("DashboardPage - empty states", () => {
-  it("shows empty state for upcoming deadlines when none exist", async () => {
-    mockDashboardFetch(buildDashboardResponse());
-
-    render(<DashboardPage />);
-
-    await waitFor(() => {
-      expect(screen.getByText("No upcoming deadlines")).toBeInTheDocument();
-    });
-    expect(screen.getByText("All deliverables are up to date.")).toBeInTheDocument();
-  });
-
-  it("shows empty state for recent activity when none exist", async () => {
-    mockDashboardFetch(buildDashboardResponse());
-
-    render(<DashboardPage />);
-
-    await waitFor(() => {
-      expect(screen.getByText("No recent activity")).toBeInTheDocument();
-    });
-    expect(
-      screen.getByText("Activity will appear here as you work with sponsors.")
-    ).toBeInTheDocument();
-  });
-
-  it("handles null/undefined arrays from API", async () => {
-    mockDashboardFetch(buildDashboardResponse({
-      deals: undefined as any,
-      deliverables: undefined as any,
-      payments: undefined as any,
-      metrics: {
-        activeDeals: 0,
-        draftDeals: 0,
-        completedDeals: 0,
-        revenueMtd: 0,
-        pendingDeliverables: 0,
-        overduePayments: 0,
-      },
-    }));
-
-    render(<DashboardPage />);
-
-    await waitFor(() => {
-      expect(screen.getByText("No upcoming deadlines")).toBeInTheDocument();
-    });
-  });
-});
-
-describe("DashboardPage - abort and cleanup", () => {
-  it("aborts fetch on unmount", async () => {
-    const fetchSpy = vi.spyOn(globalThis, "fetch").mockReturnValue(new Promise(() => {}));
-    const { unmount } = render(<DashboardPage />);
-
-    await waitFor(() => {
-      expect(fetchSpy).toHaveBeenCalled();
-    });
-
-    const signal = fetchSpy.mock.calls[0]![1]!.signal as AbortSignal;
-    expect(signal.aborted).toBe(false);
-
-    unmount();
-
-    expect(signal.aborted).toBe(true);
-  });
 
   it("renders pipeline cards as links to deals page", async () => {
-    mockDashboardFetch(buildDashboardResponse({
+    mockDbQueries({
       deals: mockDeals,
       deliverables: [],
       payments: [],
-    }));
+    });
+    const { default: DashboardPage } = await import("@/app/(dashboard)/page");
 
-    render(<DashboardPage />);
+    const result = await DashboardPage();
+    render(result as React.ReactElement);
 
     await waitFor(() => {
       expect(screen.getByText("Deal Pipeline")).toBeInTheDocument();
@@ -718,6 +373,71 @@ describe("DashboardPage - abort and cleanup", () => {
       .getAllByRole("link")
       .filter((l) => l.getAttribute("href") === "/dashboard/deals");
     expect(links.length).toBe(3);
+  });
+});
+
+describe("DashboardPage - empty states", () => {
+  it("shows empty state for upcoming deadlines when none exist", async () => {
+    mockDbQueries();
+    const { default: DashboardPage } = await import("@/app/(dashboard)/page");
+
+    const result = await DashboardPage();
+    render(result as React.ReactElement);
+
+    await waitFor(() => {
+      expect(screen.getByText("No upcoming deadlines")).toBeInTheDocument();
+    });
+    expect(screen.getByText("All deliverables are up to date.")).toBeInTheDocument();
+  });
+
+  it("shows empty state for recent activity when none exist", async () => {
+    mockDbQueries();
+    const { default: DashboardPage } = await import("@/app/(dashboard)/page");
+
+    const result = await DashboardPage();
+    render(result as React.ReactElement);
+
+    await waitFor(() => {
+      expect(screen.getByText("No recent activity")).toBeInTheDocument();
+    });
+    expect(
+      screen.getByText("Activity will appear here as you work with sponsors.")
+    ).toBeInTheDocument();
+  });
+});
+
+describe("DashboardPage - error propagation", () => {
+  it("propagates database errors from deals query", async () => {
+    (getDealsByUserId as ReturnType<typeof vi.fn>).mockRejectedValue(
+      new Error("Database connection failed")
+    );
+    (getDeliverablesByUserId as ReturnType<typeof vi.fn>).mockResolvedValue([]);
+    (getPaymentsByUserId as ReturnType<typeof vi.fn>).mockResolvedValue([]);
+    const { default: DashboardPage } = await import("@/app/(dashboard)/page");
+
+    await expect(DashboardPage()).rejects.toThrow("Database connection failed");
+  });
+
+  it("propagates database errors from deliverables query", async () => {
+    (getDealsByUserId as ReturnType<typeof vi.fn>).mockResolvedValue([]);
+    (getDeliverablesByUserId as ReturnType<typeof vi.fn>).mockRejectedValue(
+      new Error("Query timeout")
+    );
+    (getPaymentsByUserId as ReturnType<typeof vi.fn>).mockResolvedValue([]);
+    const { default: DashboardPage } = await import("@/app/(dashboard)/page");
+
+    await expect(DashboardPage()).rejects.toThrow("Query timeout");
+  });
+
+  it("propagates database errors from payments query", async () => {
+    (getDealsByUserId as ReturnType<typeof vi.fn>).mockResolvedValue([]);
+    (getDeliverablesByUserId as ReturnType<typeof vi.fn>).mockResolvedValue([]);
+    (getPaymentsByUserId as ReturnType<typeof vi.fn>).mockRejectedValue(
+      new Error("Connection refused")
+    );
+    const { default: DashboardPage } = await import("@/app/(dashboard)/page");
+
+    await expect(DashboardPage()).rejects.toThrow("Connection refused");
   });
 });
 
@@ -731,13 +451,15 @@ describe("DashboardPage - boundary values", () => {
       sponsorName: "Sponsor",
     }));
 
-    mockDashboardFetch(buildDashboardResponse({
+    mockDbQueries({
       deals: [],
       deliverables: manyDeliverables,
       payments: [],
-    }));
+    });
+    const { default: DashboardPage } = await import("@/app/(dashboard)/page");
 
-    render(<DashboardPage />);
+    const result = await DashboardPage();
+    render(result as React.ReactElement);
 
     await waitFor(() => {
       expect(screen.getByText("Upcoming Deadlines")).toBeInTheDocument();
@@ -759,13 +481,15 @@ describe("DashboardPage - boundary values", () => {
       sponsorName: `Sponsor ${i}`,
     }));
 
-    mockDashboardFetch(buildDashboardResponse({
+    mockDbQueries({
       deals: [],
       deliverables: [],
       payments: manyPayments,
-    }));
+    });
+    const { default: DashboardPage } = await import("@/app/(dashboard)/page");
 
-    render(<DashboardPage />);
+    const result = await DashboardPage();
+    render(result as React.ReactElement);
 
     await waitFor(() => {
       expect(screen.getByText("Recent Activity")).toBeInTheDocument();
@@ -776,42 +500,18 @@ describe("DashboardPage - boundary values", () => {
   });
 
   it("handles zero value metrics", async () => {
-    mockDashboardFetch(buildDashboardResponse({
+    mockDbQueries({
       deals: [],
       deliverables: [],
       payments: [],
-    }));
+    });
+    const { default: DashboardPage } = await import("@/app/(dashboard)/page");
 
-    render(<DashboardPage />);
+    const result = await DashboardPage();
+    render(result as React.ReactElement);
 
     await waitFor(() => {
       expect(screen.getByText("$0")).toBeInTheDocument();
-    });
-  });
-
-  it("handles deal with null totalValue", async () => {
-    const dealsWithNullValue = [
-      {
-        id: "d1",
-        sponsorName: "Acme Corp",
-        title: "No Value Deal",
-        status: "active",
-        totalValue: null,
-        currency: "USD",
-        endDate: futureDate(30),
-      },
-    ];
-
-    mockDashboardFetch(buildDashboardResponse({
-      deals: dealsWithNullValue,
-      deliverables: [],
-      payments: [],
-    }));
-
-    render(<DashboardPage />);
-
-    await waitFor(() => {
-      expect(screen.getByText("Active Deals")).toBeInTheDocument();
     });
   });
 
@@ -822,13 +522,15 @@ describe("DashboardPage - boundary values", () => {
       { id: "dl3", title: "Middle", dueDate: futureDate(5), status: "pending", sponsorName: "C" },
     ];
 
-    mockDashboardFetch(buildDashboardResponse({
+    mockDbQueries({
       deals: [],
       deliverables: unsorted,
       payments: [],
-    }));
+    });
+    const { default: DashboardPage } = await import("@/app/(dashboard)/page");
 
-    render(<DashboardPage />);
+    const result = await DashboardPage();
+    render(result as React.ReactElement);
 
     await waitFor(() => {
       expect(screen.getByText("Sooner")).toBeInTheDocument();
@@ -847,13 +549,15 @@ describe("DashboardPage - boundary values", () => {
       { id: "p3", amount: 300, currency: "USD", status: "paid", dueDate: null, paidDate: null, createdAt: "2025-03-01T00:00:00Z", sponsorName: "MidCo" },
     ];
 
-    mockDashboardFetch(buildDashboardResponse({
+    mockDbQueries({
       deals: [],
       deliverables: [],
       payments,
-    }));
+    });
+    const { default: DashboardPage } = await import("@/app/(dashboard)/page");
 
-    render(<DashboardPage />);
+    const result = await DashboardPage();
+    render(result as React.ReactElement);
 
     await waitFor(() => {
       expect(screen.getByText("NewCo — $200")).toBeInTheDocument();
@@ -870,13 +574,15 @@ describe("DashboardPage - boundary values", () => {
       { id: "dl1", title: "Overdue Item", dueDate: pastDate(5), status: "in_progress", sponsorName: "Late Sponsor" },
     ];
 
-    mockDashboardFetch(buildDashboardResponse({
+    mockDbQueries({
       deals: [],
       deliverables: overdueDeliverable,
       payments: [],
-    }));
+    });
+    const { default: DashboardPage } = await import("@/app/(dashboard)/page");
 
-    render(<DashboardPage />);
+    const result = await DashboardPage();
+    render(result as React.ReactElement);
 
     await waitFor(() => {
       expect(screen.getByText("Upcoming Deadlines")).toBeInTheDocument();
@@ -891,13 +597,15 @@ describe("DashboardPage - boundary values", () => {
       { id: "dl1", title: "Due Soon", dueDate: futureDate(1), status: "pending", sponsorName: "Soon Sponsor" },
     ];
 
-    mockDashboardFetch(buildDashboardResponse({
+    mockDbQueries({
       deals: [],
       deliverables: soonDeliverable,
       payments: [],
-    }));
+    });
+    const { default: DashboardPage } = await import("@/app/(dashboard)/page");
 
-    render(<DashboardPage />);
+    const result = await DashboardPage();
+    render(result as React.ReactElement);
 
     await waitFor(() => {
       expect(screen.getByText("Due Soon")).toBeInTheDocument();
@@ -907,256 +615,23 @@ describe("DashboardPage - boundary values", () => {
   });
 });
 
-describe("DashboardPage - session status edge cases", () => {
-  it("does not redirect when session status transitions from loading to authenticated", async () => {
-    let currentStatus = "loading";
-    (useSession as ReturnType<typeof vi.fn>).mockImplementation(() => ({
-      data: currentStatus === "authenticated" ? { user: { id: "user-1" } } : null,
-      status: currentStatus,
-    }));
+describe("DashboardPage - session edge cases", () => {
+  it("handles session with minimal user data", async () => {
+    mockAuth({ user: { id: "u" } } as any);
+    mockDbQueries();
+    const { default: DashboardPage } = await import("@/app/(dashboard)/page");
 
-    mockDashboardFetch(buildDashboardResponse());
-
-    const { rerender } = render(<DashboardPage />);
-
-    expect(mockRouter.replace).not.toHaveBeenCalled();
-
-    currentStatus = "authenticated";
-    rerender(<DashboardPage />);
-
-    await waitFor(() => {
-      expect(screen.getByText("Dashboard")).toBeInTheDocument();
-    });
-
-    expect(mockRouter.replace).not.toHaveBeenCalled();
+    const result = await DashboardPage();
+    expect(result).toBeDefined();
+    expect(getDealsByUserId).toHaveBeenCalledWith("u");
   });
 
-  it("does not attempt fetch when session has data but status is loading", async () => {
-    (useSession as ReturnType<typeof vi.fn>).mockReturnValue({
-      data: { user: { id: "user-1" } },
-      status: "loading",
-    });
-    const fetchSpy = vi.spyOn(globalThis, "fetch").mockReturnValue(new Promise(() => {}));
+  it("calls getAuthenticatedSession exactly once per render", async () => {
+    mockDbQueries();
+    const { default: DashboardPage } = await import("@/app/(dashboard)/page");
 
-    render(<DashboardPage />);
+    await DashboardPage();
 
-    expect(fetchSpy).not.toHaveBeenCalled();
-  });
-
-  it("handles null session data with authenticated status gracefully", async () => {
-    (useSession as ReturnType<typeof vi.fn>).mockReturnValue({
-      data: null,
-      status: "authenticated",
-    });
-    mockDashboardFetch(buildDashboardResponse());
-
-    render(<DashboardPage />);
-
-    await waitFor(() => {
-      expect(screen.getByText("Dashboard")).toBeInTheDocument();
-    });
-  });
-});
-
-describe("DashboardPage - fetch credentials verification", () => {
-  it("always includes credentials: include for all HTTP methods", async () => {
-    mockAuthenticatedSession();
-    const fetchSpy = vi.spyOn(globalThis, "fetch").mockImplementation((url: string | URL | Request, opts?: RequestInit) => {
-      const path = typeof url === "string" ? url : url.toString();
-      if (path.includes("/api/dashboard")) {
-        return Promise.resolve({
-          ok: true,
-          status: 200,
-          json: () => Promise.resolve(buildDashboardResponse()),
-        } as Response);
-      }
-      return Promise.resolve({ ok: false, status: 404, json: () => Promise.resolve({}) } as Response);
-    });
-
-    render(<DashboardPage />);
-
-    await waitFor(() => {
-      expect(fetchSpy).toHaveBeenCalled();
-    });
-
-    const callOpts = fetchSpy.mock.calls[0]![1] as RequestInit;
-    expect(callOpts.credentials).toBe("include");
-  });
-
-  it("includes Content-Type header in fetch request", async () => {
-    mockAuthenticatedSession();
-    const fetchSpy = vi.spyOn(globalThis, "fetch").mockImplementation((url: string | URL | Request) => {
-      const path = typeof url === "string" ? url : url.toString();
-      if (path.includes("/api/dashboard")) {
-        return Promise.resolve({
-          ok: true,
-          status: 200,
-          json: () => Promise.resolve(buildDashboardResponse()),
-        } as Response);
-      }
-      return Promise.resolve({ ok: false, status: 404, json: () => Promise.resolve({}) } as Response);
-    });
-
-    render(<DashboardPage />);
-
-    await waitFor(() => {
-      expect(fetchSpy).toHaveBeenCalled();
-    });
-
-    const callOpts = fetchSpy.mock.calls[0]![1] as RequestInit;
-    const headers = callOpts.headers as Record<string, string>;
-    expect(headers["Content-Type"]).toBe("application/json");
-  });
-
-  it("includes X-CSRF-Token header when cookie is present", async () => {
-    mockAuthenticatedSession();
-    Object.defineProperty(document, "cookie", {
-      writable: true,
-      value: "csrfToken=my-csrf-token",
-    });
-    const fetchSpy = vi.spyOn(globalThis, "fetch").mockImplementation((url: string | URL | Request) => {
-      const path = typeof url === "string" ? url : url.toString();
-      if (path.includes("/api/dashboard")) {
-        return Promise.resolve({
-          ok: true,
-          status: 200,
-          json: () => Promise.resolve(buildDashboardResponse()),
-        } as Response);
-      }
-      return Promise.resolve({ ok: false, status: 404, json: () => Promise.resolve({}) } as Response);
-    });
-
-    render(<DashboardPage />);
-
-    await waitFor(() => {
-      expect(fetchSpy).toHaveBeenCalled();
-    });
-
-    const callOpts = fetchSpy.mock.calls[0]![1] as RequestInit;
-    const headers = callOpts.headers as Record<string, string>;
-    expect(headers["X-CSRF-Token"]).toBe("my-csrf-token");
-
-    Object.defineProperty(document, "cookie", { writable: true, value: "" });
-  });
-});
-
-describe("DashboardPage - auth guard redirect behavior", () => {
-  it("uses router.replace (not push) to prevent back navigation to dashboard", async () => {
-    mockUnauthenticatedSession();
-    vi.spyOn(globalThis, "fetch").mockReturnValue(new Promise(() => {}));
-
-    render(<DashboardPage />);
-
-    await waitFor(() => {
-      expect(mockRouter.replace).toHaveBeenCalledWith("/login");
-    });
-
-    expect(mockRouter.push).not.toHaveBeenCalled();
-  });
-
-  it("redirects exactly once for unauthenticated session", async () => {
-    mockUnauthenticatedSession();
-    vi.spyOn(globalThis, "fetch").mockReturnValue(new Promise(() => {}));
-
-    render(<DashboardPage />);
-
-    await waitFor(() => {
-      expect(mockRouter.replace).toHaveBeenCalled();
-    });
-
-    expect(mockRouter.replace).toHaveBeenCalledTimes(1);
-  });
-
-  it("does not redirect on 403 forbidden response", async () => {
-    mockAuthenticatedSession();
-    vi.spyOn(globalThis, "fetch").mockImplementation(() =>
-      Promise.resolve({
-        ok: false,
-        status: 403,
-        statusText: "Forbidden",
-        json: () => Promise.resolve({ error: "Access denied" }),
-      } as Response)
-    );
-
-    render(<DashboardPage />);
-
-    await waitFor(() => {
-      expect(screen.getByText("Access denied")).toBeInTheDocument();
-    });
-
-    expect(mockRouter.replace).not.toHaveBeenCalled();
-  });
-
-  it("does not redirect on 500 server error", async () => {
-    mockAuthenticatedSession();
-    vi.spyOn(globalThis, "fetch").mockImplementation(() =>
-      Promise.resolve({
-        ok: false,
-        status: 500,
-        statusText: "Internal Server Error",
-        json: () => Promise.resolve({ error: "Server error" }),
-      } as Response)
-    );
-
-    render(<DashboardPage />);
-
-    await waitFor(() => {
-      expect(screen.getByText("Server error")).toBeInTheDocument();
-    });
-
-    expect(mockRouter.replace).not.toHaveBeenCalled();
-  });
-});
-
-describe("DashboardPage - data integrity with auth", () => {
-  it("clears error state on retry after successful fetch", async () => {
-    mockAuthenticatedSession();
-
-    vi.spyOn(globalThis, "fetch")
-      .mockRejectedValueOnce(new Error("Network error"))
-      .mockImplementationOnce(() =>
-        Promise.resolve({
-          ok: true,
-          status: 200,
-          json: () => Promise.resolve(buildDashboardResponse({
-            deals: mockDeals,
-            deliverables: [],
-            payments: [],
-          })),
-        } as Response)
-      );
-
-    render(<DashboardPage />);
-
-    await waitFor(() => {
-      expect(screen.getByText("Network error")).toBeInTheDocument();
-    });
-
-    fireEvent.click(screen.getByText("Try again"));
-
-    await waitFor(() => {
-      expect(screen.queryByText("Network error")).not.toBeInTheDocument();
-    });
-  });
-
-  it("does not show stale data after auth failure error", async () => {
-    mockAuthenticatedSession();
-    vi.spyOn(globalThis, "fetch").mockImplementation(() =>
-      Promise.resolve({
-        ok: false,
-        status: 401,
-        statusText: "Unauthorized",
-        json: () => Promise.resolve({ error: "Unauthorized" }),
-      } as Response)
-    );
-
-    render(<DashboardPage />);
-
-    await waitFor(() => {
-      expect(screen.getByText("Unauthorized")).toBeInTheDocument();
-    });
-
-    expect(screen.queryByText("Active Deals")).not.toBeInTheDocument();
-    expect(screen.queryByText("Deal Pipeline")).not.toBeInTheDocument();
+    expect(getAuthenticatedSession).toHaveBeenCalledTimes(1);
   });
 });

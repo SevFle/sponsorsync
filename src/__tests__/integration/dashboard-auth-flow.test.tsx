@@ -1,427 +1,189 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { render, screen, waitFor, act, fireEvent } from "@testing-library/react";
-import DashboardPage from "@/app/(dashboard)/page";
+import { render, screen, waitFor, fireEvent } from "@testing-library/react";
 
-const mockRouter = {
-  push: vi.fn(),
-  replace: vi.fn(),
-  back: vi.fn(),
-  forward: vi.fn(),
-  refresh: vi.fn(),
-  prefetch: vi.fn(),
-};
-
-vi.mock("next-auth/react", () => ({
-  useSession: vi.fn(),
+vi.mock("@/lib/auth/guard", () => ({
+  getAuthenticatedSession: vi.fn(),
 }));
 
 vi.mock("next/navigation", () => ({
-  useRouter: () => mockRouter,
+  redirect: vi.fn(() => {
+    throw new Error("NEXT_REDIRECT");
+  }),
 }));
 
-import { useSession } from "next-auth/react";
+vi.mock("@/lib/db/queries/deals", () => ({
+  getDealsByUserId: vi.fn(),
+}));
 
-function setSession(status: string, data?: any) {
-  (useSession as ReturnType<typeof vi.fn>).mockReturnValue({
-    data: data ?? null,
-    status,
-  });
+vi.mock("@/lib/db/queries/deliverables", () => ({
+  getDeliverablesByUserId: vi.fn(),
+}));
+
+vi.mock("@/lib/db/queries/payments", () => ({
+  getPaymentsByUserId: vi.fn(),
+}));
+
+import { getAuthenticatedSession } from "@/lib/auth/guard";
+import { redirect } from "next/navigation";
+import { getDealsByUserId } from "@/lib/db/queries/deals";
+import { getDeliverablesByUserId } from "@/lib/db/queries/deliverables";
+import { getPaymentsByUserId } from "@/lib/db/queries/payments";
+
+const mockSession = { user: { id: "user-1", email: "test@test.com", name: "Test User" } };
+
+function setAuth(session: typeof mockSession | null) {
+  (getAuthenticatedSession as ReturnType<typeof vi.fn>).mockResolvedValue(session);
 }
 
-function mockFetchSuccess(data: any) {
-  return vi.spyOn(globalThis, "fetch").mockImplementation((url: string | URL | Request) => {
-    const path = typeof url === "string" ? url : url.toString();
-    if (path.includes("/api/dashboard")) {
-      return Promise.resolve({
-        ok: true,
-        status: 200,
-        json: () => Promise.resolve(data),
-      } as Response);
-    }
-    return Promise.resolve({
-      ok: false,
-      status: 404,
-      json: () => Promise.resolve({}),
-    } as Response);
-  });
+function mockDbQueries(deals: any[] = [], deliverables: any[] = [], payments: any[] = []) {
+  (getDealsByUserId as ReturnType<typeof vi.fn>).mockResolvedValue(deals);
+  (getDeliverablesByUserId as ReturnType<typeof vi.fn>).mockResolvedValue(deliverables);
+  (getPaymentsByUserId as ReturnType<typeof vi.fn>).mockResolvedValue(payments);
 }
 
 const emptyDashboard = {
   deals: [],
   deliverables: [],
   payments: [],
-  metrics: {
-    activeDeals: 0,
-    draftDeals: 0,
-    completedDeals: 0,
-    revenueMtd: 0,
-    pendingDeliverables: 0,
-    overduePayments: 0,
-  },
 };
 
 beforeEach(() => {
-  vi.restoreAllMocks();
-  mockRouter.replace.mockClear();
-  mockRouter.push.mockClear();
+  vi.clearAllMocks();
 });
 
 afterEach(() => {
   vi.restoreAllMocks();
 });
 
-describe("Dashboard auth flow - redirect to login", () => {
-  it("redirects immediately when session is unauthenticated", async () => {
-    setSession("unauthenticated");
-    vi.spyOn(globalThis, "fetch").mockReturnValue(new Promise(() => {}));
+describe("Dashboard auth flow - server-side redirect", () => {
+  it("redirects to /login when not authenticated", async () => {
+    setAuth(null);
+    const { default: DashboardPage } = await import("@/app/(dashboard)/page");
 
-    render(<DashboardPage />);
-
-    await waitFor(() => {
-      expect(mockRouter.replace).toHaveBeenCalledWith("/login");
-    });
+    await expect(DashboardPage()).rejects.toThrow("NEXT_REDIRECT");
+    expect(redirect).toHaveBeenCalledWith("/login");
   });
 
-  it("uses replace (not push) for redirect to prevent back-button loop", async () => {
-    setSession("unauthenticated");
-    vi.spyOn(globalThis, "fetch").mockReturnValue(new Promise(() => {}));
+  it("does not query database when unauthenticated", async () => {
+    setAuth(null);
+    const { default: DashboardPage } = await import("@/app/(dashboard)/page");
 
-    render(<DashboardPage />);
-
-    await waitFor(() => {
-      expect(mockRouter.replace).toHaveBeenCalledWith("/login");
-    });
-    expect(mockRouter.push).not.toHaveBeenCalled();
+    await expect(DashboardPage()).rejects.toThrow("NEXT_REDIRECT");
+    expect(getDealsByUserId).not.toHaveBeenCalled();
+    expect(getDeliverablesByUserId).not.toHaveBeenCalled();
+    expect(getPaymentsByUserId).not.toHaveBeenCalled();
   });
 
-  it("does not fetch data when unauthenticated", async () => {
-    setSession("unauthenticated");
-    const fetchSpy = vi.spyOn(globalThis, "fetch").mockReturnValue(new Promise(() => {}));
+  it("does not redirect when authenticated", async () => {
+    setAuth(mockSession);
+    mockDbQueries();
+    const { default: DashboardPage } = await import("@/app/(dashboard)/page");
 
-    render(<DashboardPage />);
-
-    await waitFor(() => {
-      expect(mockRouter.replace).toHaveBeenCalled();
-    });
-
-    expect(fetchSpy).not.toHaveBeenCalled();
-  });
-
-  it("shows loading skeleton while session is loading", () => {
-    setSession("loading");
-    vi.spyOn(globalThis, "fetch").mockReturnValue(new Promise(() => {}));
-
-    const { container } = render(<DashboardPage />);
-    const skeletons = container.querySelectorAll(".animate-pulse");
-    expect(skeletons.length).toBeGreaterThan(0);
+    const result = await DashboardPage();
+    expect(redirect).not.toHaveBeenCalled();
+    expect(result).toBeDefined();
   });
 });
 
-describe("Dashboard auth flow - session state transitions", () => {
-  it("transitions from loading to authenticated and fetches data", async () => {
-    let sessionCallback: any;
-    (useSession as ReturnType<typeof vi.fn>).mockImplementation(() => {
-      return { data: null, status: "loading" };
-    });
+describe("Dashboard auth flow - server-side data fetching", () => {
+  it("fetches all data sources for authenticated user", async () => {
+    setAuth(mockSession);
+    mockDbQueries();
+    const { default: DashboardPage } = await import("@/app/(dashboard)/page");
 
-    const fetchSpy = mockFetchSuccess(emptyDashboard);
+    await DashboardPage();
 
-    render(<DashboardPage />);
-
-    expect(fetchSpy).not.toHaveBeenCalled();
+    expect(getDealsByUserId).toHaveBeenCalledWith("user-1");
+    expect(getDeliverablesByUserId).toHaveBeenCalledWith("user-1");
+    expect(getPaymentsByUserId).toHaveBeenCalledWith("user-1");
   });
 
-  it("transitions from loading to unauthenticated and redirects", async () => {
-    setSession("loading");
-    vi.spyOn(globalThis, "fetch").mockReturnValue(new Promise(() => {}));
+  it("renders dashboard content after successful data fetch", async () => {
+    setAuth(mockSession);
+    mockDbQueries();
+    const { default: DashboardPage } = await import("@/app/(dashboard)/page");
 
-    const { rerender } = render(<DashboardPage />);
-
-    expect(mockRouter.replace).not.toHaveBeenCalled();
-
-    setSession("unauthenticated");
-    rerender(<DashboardPage />);
+    const result = await DashboardPage();
+    render(result as React.ReactElement);
 
     await waitFor(() => {
-      expect(mockRouter.replace).toHaveBeenCalledWith("/login");
+      expect(screen.getByText("Dashboard")).toBeInTheDocument();
     });
   });
-});
 
-describe("Dashboard auth flow - 401 API response handling", () => {
-  it("shows error message on 401 response", async () => {
-    setSession("authenticated", { user: { id: "user-1" } });
-    vi.spyOn(globalThis, "fetch").mockImplementation(() =>
-      Promise.resolve({
-        ok: false,
-        status: 401,
-        statusText: "Unauthorized",
-        json: () => Promise.resolve({ error: "Unauthorized" }),
-      } as Response)
+  it("renders dashboard with deal data", async () => {
+    setAuth(mockSession);
+    mockDbQueries(
+      [{ id: "d1", status: "active", sponsorName: "Test" }],
+      [],
+      []
     );
+    const { default: DashboardPage } = await import("@/app/(dashboard)/page");
 
-    render(<DashboardPage />);
+    const result = await DashboardPage();
+    render(result as React.ReactElement);
 
     await waitFor(() => {
-      expect(screen.getByText("Unauthorized")).toBeInTheDocument();
+      expect(screen.getByText("Active Deals")).toBeInTheDocument();
     });
   });
+});
 
-  it("does not redirect on 401 - shows error with retry instead", async () => {
-    setSession("authenticated", { user: { id: "user-1" } });
-    vi.spyOn(globalThis, "fetch").mockImplementation(() =>
-      Promise.resolve({
-        ok: false,
-        status: 401,
-        statusText: "Unauthorized",
-        json: () => Promise.resolve({ error: "Unauthorized" }),
-      } as Response)
+describe("Dashboard auth flow - error propagation", () => {
+  it("propagates database errors to error boundary", async () => {
+    setAuth(mockSession);
+    (getDealsByUserId as ReturnType<typeof vi.fn>).mockRejectedValue(
+      new Error("Database connection failed")
     );
+    mockDbQueries();
+    (getDealsByUserId as ReturnType<typeof vi.fn>).mockRejectedValue(
+      new Error("Database connection failed")
+    );
+    const { default: DashboardPage } = await import("@/app/(dashboard)/page");
 
-    render(<DashboardPage />);
-
-    await waitFor(() => {
-      expect(screen.getByText("Unauthorized")).toBeInTheDocument();
-    });
-
-    expect(mockRouter.replace).not.toHaveBeenCalled();
+    await expect(DashboardPage()).rejects.toThrow("Database connection failed");
   });
 
-  it("can retry after 401 error", async () => {
-    setSession("authenticated", { user: { id: "user-1" } });
+  it("propagates network-like errors from deliverables query", async () => {
+    setAuth(mockSession);
+    (getDealsByUserId as ReturnType<typeof vi.fn>).mockResolvedValue([]);
+    (getDeliverablesByUserId as ReturnType<typeof vi.fn>).mockRejectedValue(
+      new Error("Query timeout")
+    );
+    (getPaymentsByUserId as ReturnType<typeof vi.fn>).mockResolvedValue([]);
+    const { default: DashboardPage } = await import("@/app/(dashboard)/page");
 
-    vi.spyOn(globalThis, "fetch")
-      .mockImplementationOnce(() =>
-        Promise.resolve({
-          ok: false,
-          status: 401,
-          statusText: "Unauthorized",
-          json: () => Promise.resolve({ error: "Unauthorized" }),
-        } as Response)
-      )
-      .mockImplementationOnce(() =>
-        Promise.resolve({
-          ok: true,
-          status: 200,
-          json: () => Promise.resolve(emptyDashboard),
-        } as Response)
-      );
-
-    render(<DashboardPage />);
-
-    await waitFor(() => {
-      expect(screen.getByText("Unauthorized")).toBeInTheDocument();
-    });
-
-    fireEvent.click(screen.getByText("Try again"));
-
-    await waitFor(() => {
-      expect(screen.getByText("Dashboard")).toBeInTheDocument();
-    });
+    await expect(DashboardPage()).rejects.toThrow("Query timeout");
   });
 });
 
-describe("Dashboard auth flow - authenticated data fetching", () => {
-  it("fetches dashboard data after authentication", async () => {
-    setSession("authenticated", { user: { id: "user-1" } });
-    const fetchSpy = mockFetchSuccess(emptyDashboard);
+describe("Dashboard auth flow - session validation", () => {
+  it("redirects when getAuthenticatedSession returns null for falsy user id", async () => {
+    setAuth(null);
+    const { default: DashboardPage } = await import("@/app/(dashboard)/page");
 
-    render(<DashboardPage />);
-
-    await waitFor(() => {
-      expect(fetchSpy).toHaveBeenCalledTimes(1);
-    });
-
-    const callUrl = fetchSpy.mock.calls[0]![0] as string;
-    expect(callUrl).toContain("/api/dashboard");
+    await expect(DashboardPage()).rejects.toThrow("NEXT_REDIRECT");
+    expect(redirect).toHaveBeenCalledWith("/login");
+    expect(getDealsByUserId).not.toHaveBeenCalled();
   });
 
-  it("sends credentials: include in the fetch request", async () => {
-    setSession("authenticated", { user: { id: "user-1" } });
-    const fetchSpy = mockFetchSuccess(emptyDashboard);
+  it("queries database with valid session user id", async () => {
+    setAuth({ user: { id: "valid-id", email: "test@test.com", name: "Valid User" } });
+    mockDbQueries();
+    const { default: DashboardPage } = await import("@/app/(dashboard)/page");
 
-    render(<DashboardPage />);
-
-    await waitFor(() => {
-      expect(fetchSpy).toHaveBeenCalled();
-    });
-
-    const opts = fetchSpy.mock.calls[0]![1] as RequestInit;
-    expect(opts.credentials).toBe("include");
+    await DashboardPage();
+    expect(getDealsByUserId).toHaveBeenCalledWith("valid-id");
+    expect(redirect).not.toHaveBeenCalled();
   });
 
-  it("sends Content-Type: application/json in the fetch request", async () => {
-    setSession("authenticated", { user: { id: "user-1" } });
-    const fetchSpy = mockFetchSuccess(emptyDashboard);
+  it("handles session with only user id", async () => {
+    setAuth({ user: { id: "u" } } as any);
+    mockDbQueries();
+    const { default: DashboardPage } = await import("@/app/(dashboard)/page");
 
-    render(<DashboardPage />);
-
-    await waitFor(() => {
-      expect(fetchSpy).toHaveBeenCalled();
-    });
-
-    const opts = fetchSpy.mock.calls[0]![1] as RequestInit;
-    const headers = opts.headers as Record<string, string>;
-    expect(headers["Content-Type"]).toBe("application/json");
-  });
-
-  it("sends X-CSRF-Token when csrfToken cookie is set", async () => {
-    setSession("authenticated", { user: { id: "user-1" } });
-    Object.defineProperty(document, "cookie", {
-      writable: true,
-      value: "csrfToken=test-csrf-token",
-    });
-    const fetchSpy = mockFetchSuccess(emptyDashboard);
-
-    render(<DashboardPage />);
-
-    await waitFor(() => {
-      expect(fetchSpy).toHaveBeenCalled();
-    });
-
-    const opts = fetchSpy.mock.calls[0]![1] as RequestInit;
-    const headers = opts.headers as Record<string, string>;
-    expect(headers["X-CSRF-Token"]).toBe("test-csrf-token");
-
-    Object.defineProperty(document, "cookie", {
-      writable: true,
-      value: "",
-    });
-  });
-
-  it("aborts in-flight fetch on unmount", async () => {
-    setSession("authenticated", { user: { id: "user-1" } });
-    const fetchSpy = vi.spyOn(globalThis, "fetch").mockReturnValue(new Promise(() => {}));
-
-    const { unmount } = render(<DashboardPage />);
-
-    await waitFor(() => {
-      expect(fetchSpy).toHaveBeenCalled();
-    });
-
-    const signal = fetchSpy.mock.calls[0]![1]!.signal as AbortSignal;
-    expect(signal.aborted).toBe(false);
-
-    unmount();
-
-    expect(signal.aborted).toBe(true);
-  });
-});
-
-describe("Dashboard auth flow - concurrent scenarios", () => {
-  it("does not fetch while session is loading even if component re-renders", async () => {
-    setSession("loading");
-    const fetchSpy = vi.spyOn(globalThis, "fetch").mockReturnValue(new Promise(() => {}));
-
-    const { rerender } = render(<DashboardPage />);
-
-    rerender(<DashboardPage />);
-    rerender(<DashboardPage />);
-
-    expect(fetchSpy).not.toHaveBeenCalled();
-  });
-
-  it("only makes one fetch call after authentication", async () => {
-    setSession("authenticated", { user: { id: "user-1" } });
-    const fetchSpy = mockFetchSuccess(emptyDashboard);
-
-    render(<DashboardPage />);
-
-    await waitFor(() => {
-      expect(screen.getByText("Dashboard")).toBeInTheDocument();
-    });
-
-    expect(fetchSpy).toHaveBeenCalledTimes(1);
-  });
-});
-
-describe("Dashboard auth flow - error recovery", () => {
-  it("recovers from network error on retry", async () => {
-    setSession("authenticated", { user: { id: "user-1" } });
-
-    vi.spyOn(globalThis, "fetch")
-      .mockRejectedValueOnce(new Error("Network error"))
-      .mockImplementationOnce(() =>
-        Promise.resolve({
-          ok: true,
-          status: 200,
-          json: () => Promise.resolve(emptyDashboard),
-        } as Response)
-      );
-
-    render(<DashboardPage />);
-
-    await waitFor(() => {
-      expect(screen.getByText("Network error")).toBeInTheDocument();
-    });
-
-    fireEvent.click(screen.getByText("Try again"));
-
-    await waitFor(() => {
-      expect(screen.getByText("Dashboard")).toBeInTheDocument();
-    });
-  });
-
-  it("recovers from server error on retry", async () => {
-    setSession("authenticated", { user: { id: "user-1" } });
-
-    vi.spyOn(globalThis, "fetch")
-      .mockImplementationOnce(() =>
-        Promise.resolve({
-          ok: false,
-          status: 500,
-          statusText: "Internal Server Error",
-          json: () => Promise.resolve({ error: "Server error" }),
-        } as Response)
-      )
-      .mockImplementationOnce(() =>
-        Promise.resolve({
-          ok: true,
-          status: 200,
-          json: () => Promise.resolve(emptyDashboard),
-        } as Response)
-      );
-
-    render(<DashboardPage />);
-
-    await waitFor(() => {
-      expect(screen.getByText("Server error")).toBeInTheDocument();
-    });
-
-    fireEvent.click(screen.getByText("Try again"));
-
-    await waitFor(() => {
-      expect(screen.getByText("Dashboard")).toBeInTheDocument();
-    });
-  });
-
-  it("shows generic error for non-Error rejections", async () => {
-    setSession("authenticated", { user: { id: "user-1" } });
-    vi.spyOn(globalThis, "fetch").mockRejectedValueOnce("string error");
-
-    render(<DashboardPage />);
-
-    await waitFor(() => {
-      expect(screen.getByText("Something went wrong")).toBeInTheDocument();
-    });
-  });
-});
-
-describe("Dashboard auth flow - multiple session status changes", () => {
-  it("handles rapid session state changes without multiple fetches", async () => {
-    setSession("loading");
-    mockFetchSuccess(emptyDashboard);
-
-    const { rerender } = render(<DashboardPage />);
-
-    setSession("loading");
-    rerender(<DashboardPage />);
-
-    setSession("authenticated", { user: { id: "user-1" } });
-    rerender(<DashboardPage />);
-
-    await waitFor(() => {
-      expect(screen.getByText("Dashboard")).toBeInTheDocument();
-    });
+    const result = await DashboardPage();
+    expect(result).toBeDefined();
+    expect(getDealsByUserId).toHaveBeenCalledWith("u");
   });
 });
