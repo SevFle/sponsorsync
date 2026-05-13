@@ -26,6 +26,7 @@ export default async function DashboardLayout({
             <li><a href="/dashboard/templates" className="block rounded px-3 py-2 hover:bg-gray-200">Templates</a></li>
             <li><a href="/dashboard/integrations" className="block rounded px-3 py-2 hover:bg-gray-200">Integrations</a></li>
             <li><a href="/dashboard/settings" className="block rounded px-3 py-2 hover:bg-gray-200">Settings</a></li>
+            <li><a href="/dashboard/settings/billing" className="block rounded px-3 py-2 hover:bg-gray-200">Billing</a></li>
           </ul>
         </nav>
         <main className="flex-1 p-8">{children}</main>

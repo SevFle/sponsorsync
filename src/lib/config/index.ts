@@ -17,4 +17,11 @@ export const config = {
     eventKey: process.env.INNGEST_EVENT_KEY ?? "",
     signingKey: process.env.INNGEST_SIGNING_KEY ?? "",
   },
+  stripe: {
+    secretKey: process.env.STRIPE_SECRET_KEY ?? "",
+    publishableKey: process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY ?? "",
+    webhookSecret: process.env.STRIPE_WEBHOOK_SECRET ?? "",
+    starterPriceId: process.env.STRIPE_STARTER_PRICE_ID ?? "",
+    proPriceId: process.env.STRIPE_PRO_PRICE_ID ?? "",
+  },
 } as const;

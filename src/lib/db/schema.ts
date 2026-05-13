@@ -4,12 +4,26 @@ export const dealStatusEnum = pgEnum("deal_status", ["draft", "active", "complet
 export const deliverableStatusEnum = pgEnum("deliverable_status", ["pending", "in_progress", "submitted", "verified", "missed"]);
 export const paymentStatusEnum = pgEnum("payment_status", ["pending", "paid", "overdue", "cancelled"]);
 export const integrationPlatformEnum = pgEnum("integration_platform", ["buzzsprout", "transistor", "anchor", "convertkit", "mailchimp"]);
+export const subscriptionStatusEnum = pgEnum("subscription_status", ["free", "active", "past_due", "canceled", "trialing", "paused"]);
+
+export const PLANS = {
+  starter: { name: "Starter", price: 1900 },
+  pro: { name: "Pro", price: 4900 },
+} as const;
+
+export type PlanId = keyof typeof PLANS;
 
 export const users = pgTable("users", {
   id: uuid("id").primaryKey().defaultRandom(),
   email: text("email").notNull().unique(),
   name: text("name"),
   image: text("image"),
+  stripeCustomerId: text("stripe_customer_id"),
+  stripeSubscriptionId: text("stripe_subscription_id"),
+  stripePriceId: text("stripe_price_id"),
+  subscriptionStatus: subscriptionStatusEnum("subscription_status").default("free").notNull(),
+  currentPeriodStart: timestamp("current_period_start"),
+  currentPeriodEnd: timestamp("current_period_end"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });

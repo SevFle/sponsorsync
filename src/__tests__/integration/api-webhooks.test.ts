@@ -1,6 +1,20 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { NextRequest } from "next/server";
-import { POST as StripeWebhook } from "@/app/api/webhooks/stripe/route";
+
+vi.mock("@/lib/stripe", () => ({
+  constructWebhookEvent: vi.fn(),
+  mapStripeStatusToLocal: vi.fn((s: string) => s === "active" ? "active" : "free"),
+}));
+
+vi.mock("@/lib/db/queries/billing", () => ({
+  getUserByStripeCustomerId: vi.fn(),
+  updateSubscriptionStatus: vi.fn(),
+  getUserByStripeSubscriptionId: vi.fn(),
+}));
+
+vi.mock("next/headers", () => ({
+  headers: vi.fn(async () => new Map()),
+}));
 
 vi.mock("inngest/next", () => ({
   serve: vi.fn(() => ({
@@ -22,10 +36,17 @@ vi.mock("@/lib/inngest/client", () => ({
   paymentFollowUpFunction: {},
 }));
 
+import { POST as StripeWebhook } from "@/app/api/webhooks/stripe/route";
+import { constructWebhookEvent } from "@/lib/stripe";
+import { headers } from "next/headers";
 import { POST as InngestWebhook } from "@/app/api/webhooks/inngest/route";
 
+beforeEach(() => {
+  vi.clearAllMocks();
+});
+
 describe("POST /api/webhooks/stripe", () => {
-  it("returns 401 when stripe-signature header is missing", async () => {
+  it("returns 400 when stripe-signature header is missing", async () => {
     const payload = { type: "payment_intent.succeeded", data: { id: "pi_123" } };
     const request = new Request("http://localhost:3000/api/webhooks/stripe", {
       method: "POST",
@@ -36,13 +57,19 @@ describe("POST /api/webhooks/stripe", () => {
     const response = await StripeWebhook(request);
     const body = await response.json();
 
-    expect(response.status).toBe(401);
+    expect(response.status).toBe(400);
     expect(body.error).toBe("Missing stripe-signature header");
   });
 
-  it("returns 401 when stripe-signature header is invalid and STRIPE_WEBHOOK_SECRET is set", async () => {
-    process.env.STRIPE_WEBHOOK_SECRET = "whsec_valid_secret";
-    const payload = { type: "payment_intent.succeeded", data: { id: "pi_123" } };
+  it("returns 401 when webhook signature verification fails", async () => {
+    vi.mocked(headers).mockResolvedValueOnce(
+      new Map([["stripe-signature", "invalid_signature"]]) as unknown as Awaited<ReturnType<typeof headers>>
+    );
+    vi.mocked(constructWebhookEvent).mockImplementation(() => {
+      throw new Error("Invalid signature");
+    });
+
+    const payload = { type: "test", data: {} };
     const request = new Request("http://localhost:3000/api/webhooks/stripe", {
       method: "POST",
       body: JSON.stringify(payload),
@@ -56,39 +83,24 @@ describe("POST /api/webhooks/stripe", () => {
     const body = await response.json();
 
     expect(response.status).toBe(401);
-    expect(body.error).toBe("Invalid stripe-signature");
-    delete process.env.STRIPE_WEBHOOK_SECRET;
+    expect(body.error).toBe("Invalid signature");
   });
 
-  it("returns 200 with received true when stripe-signature is present and valid", async () => {
-    process.env.STRIPE_WEBHOOK_SECRET = "whsec_valid_secret";
-    const payload = { type: "payment_intent.succeeded", data: { id: "pi_123" } };
+  it("returns 200 with received true for valid webhook events", async () => {
+    vi.mocked(headers).mockResolvedValueOnce(
+      new Map([["stripe-signature", "valid_sig"]]) as unknown as Awaited<ReturnType<typeof headers>>
+    );
+    vi.mocked(constructWebhookEvent).mockReturnValue({
+      type: "product.created",
+      data: { object: {} as any },
+    } as any);
+
     const request = new Request("http://localhost:3000/api/webhooks/stripe", {
       method: "POST",
-      body: JSON.stringify(payload),
+      body: JSON.stringify({ type: "product.created", data: {} }),
       headers: {
         "Content-Type": "application/json",
-        "stripe-signature": "whsec_valid_secret",
-      },
-    });
-
-    const response = await StripeWebhook(request);
-    const body = await response.json();
-
-    expect(response.status).toBe(200);
-    expect(body).toEqual({ received: true });
-    delete process.env.STRIPE_WEBHOOK_SECRET;
-  });
-
-  it("returns 200 when stripe-signature is present and no secret configured", async () => {
-    delete process.env.STRIPE_WEBHOOK_SECRET;
-    const payload = { type: "payment_intent.succeeded", data: { id: "pi_123" } };
-    const request = new Request("http://localhost:3000/api/webhooks/stripe", {
-      method: "POST",
-      body: JSON.stringify(payload),
-      headers: {
-        "Content-Type": "application/json",
-        "stripe-signature": "any_signature",
+        "stripe-signature": "valid_sig",
       },
     });
 
@@ -99,8 +111,15 @@ describe("POST /api/webhooks/stripe", () => {
     expect(body).toEqual({ received: true });
   });
 
-  it("returns received regardless of payload content when signature is valid", async () => {
-    delete process.env.STRIPE_WEBHOOK_SECRET;
+  it("returns received regardless of payload content when event is unhandled", async () => {
+    vi.mocked(headers).mockResolvedValueOnce(
+      new Map([["stripe-signature", "test_sig"]]) as unknown as Awaited<ReturnType<typeof headers>>
+    );
+    vi.mocked(constructWebhookEvent).mockReturnValue({
+      type: "account.updated",
+      data: { object: {} as any },
+    } as any);
+
     const request = new Request("http://localhost:3000/api/webhooks/stripe", {
       method: "POST",
       body: JSON.stringify({}),
@@ -114,23 +133,6 @@ describe("POST /api/webhooks/stripe", () => {
     const body = await response.json();
 
     expect(body.received).toBe(true);
-  });
-
-  it("returns 401 with empty stripe-signature header", async () => {
-    const request = new Request("http://localhost:3000/api/webhooks/stripe", {
-      method: "POST",
-      body: JSON.stringify({ type: "test" }),
-      headers: {
-        "Content-Type": "application/json",
-        "stripe-signature": "",
-      },
-    });
-
-    const response = await StripeWebhook(request);
-    const body = await response.json();
-
-    expect(response.status).toBe(401);
-    expect(body.error).toBe("Missing stripe-signature header");
   });
 });
 

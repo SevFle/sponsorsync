@@ -1,23 +1,140 @@
 import { NextResponse } from "next/server";
+import { headers } from "next/headers";
+import { constructWebhookEvent, mapStripeStatusToLocal } from "@/lib/stripe";
+import {
+  getUserByStripeCustomerId,
+  updateSubscriptionStatus,
+  getUserByStripeSubscriptionId,
+} from "@/lib/db/queries/billing";
+import type Stripe from "stripe";
+
+async function handleSubscriptionChange(subscription: Stripe.Subscription) {
+  const userId = subscription.metadata?.userId;
+  if (!userId) return;
+
+  const localStatus = mapStripeStatusToLocal(subscription.status);
+
+  await updateSubscriptionStatus(userId, {
+    stripeSubscriptionId: subscription.id,
+    stripePriceId: subscription.items.data[0]?.price.id,
+    subscriptionStatus: localStatus,
+    currentPeriodStart: new Date((subscription as unknown as Record<string, number>).current_period_start * 1000),
+    currentPeriodEnd: new Date((subscription as unknown as Record<string, number>).current_period_end * 1000),
+  });
+}
+
+async function clearSubscription(userId: string) {
+  await updateSubscriptionStatus(userId, {
+    stripeSubscriptionId: undefined,
+    stripePriceId: undefined,
+    subscriptionStatus: "free",
+    currentPeriodStart: undefined,
+    currentPeriodEnd: undefined,
+  });
+}
+
+async function handleCustomerDeleted(customer: Stripe.Customer) {
+  const userId = customer.metadata?.userId;
+  if (!userId) return;
+  await clearSubscription(userId);
+}
+
+async function handleSubscriptionDeleted(subscription: Stripe.Subscription) {
+  const userId = subscription.metadata?.userId;
+  if (!userId) {
+    const user = await getUserByStripeSubscriptionId(subscription.id);
+    if (!user) return;
+    await clearSubscription(user.id);
+    return;
+  }
+  await clearSubscription(userId);
+}
 
 export async function POST(request: Request) {
-  const signature = request.headers.get("stripe-signature");
+  const body = await request.text();
+  const signature = (await headers()).get("stripe-signature");
 
   if (!signature) {
     return NextResponse.json(
       { error: "Missing stripe-signature header" },
-      { status: 401 }
+      { status: 400 }
     );
   }
 
-  const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
-  if (webhookSecret && signature !== webhookSecret) {
+  let event: Stripe.Event;
+  try {
+    event = constructWebhookEvent(body, signature);
+  } catch {
     return NextResponse.json(
-      { error: "Invalid stripe-signature" },
+      { error: "Invalid signature" },
       { status: 401 }
     );
   }
 
-  const body = await request.json();
+  try {
+    switch (event.type) {
+      case "customer.subscription.created":
+      case "customer.subscription.updated": {
+        const subscription = event.data.object as Stripe.Subscription;
+        await handleSubscriptionChange(subscription);
+        break;
+      }
+      case "customer.subscription.deleted": {
+        const subscription = event.data.object as Stripe.Subscription;
+        await handleSubscriptionDeleted(subscription);
+        break;
+      }
+      case "customer.deleted": {
+        const customer = event.data.object as Stripe.Customer;
+        await handleCustomerDeleted(customer);
+        break;
+      }
+      case "checkout.session.completed": {
+        const session = event.data.object as Stripe.Checkout.Session;
+        if (session.metadata?.userId && session.subscription) {
+          const subId =
+            typeof session.subscription === "string"
+              ? session.subscription
+              : session.subscription.id;
+
+          const user = await getUserByStripeCustomerId(
+            session.customer as string
+          );
+          if (user) {
+            await updateSubscriptionStatus(user.id, {
+              stripeSubscriptionId: subId,
+              subscriptionStatus: "active",
+            });
+          }
+        }
+        break;
+      }
+      case "invoice.payment_failed": {
+        const invoice = event.data.object as Stripe.Invoice;
+        const customerId =
+          typeof invoice.customer === "string"
+            ? invoice.customer
+            : invoice.customer?.id;
+        if (customerId) {
+          const user = await getUserByStripeCustomerId(customerId);
+          if (user) {
+            await updateSubscriptionStatus(user.id, {
+              subscriptionStatus: "past_due",
+            });
+          }
+        }
+        break;
+      }
+      default:
+        break;
+    }
+  } catch (error) {
+    console.error(`Error handling Stripe event ${event.type}:`, error);
+    return NextResponse.json(
+      { error: "Webhook handler failed" },
+      { status: 500 }
+    );
+  }
+
   return NextResponse.json({ received: true });
 }
