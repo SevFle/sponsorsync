@@ -157,4 +157,102 @@ describe("verifyBulkDeliverables", () => {
     expect(result.passed).toBe(2);
     expect(result.pending).toBe(1);
   });
+
+  it("handles large number of deliverables", () => {
+    const future = new Date();
+    future.setDate(future.getDate() + 10);
+
+    const rows = Array.from({ length: 100 }, (_, i) =>
+      makeRow({ id: `d-${i}`, status: "verified", dueDate: future.toISOString() })
+    );
+
+    const result = verifyBulkDeliverables(rows);
+    expect(result.totalChecked).toBe(100);
+    expect(result.passed).toBe(100);
+    expect(result.reports).toHaveLength(100);
+  });
+
+  it("handles deliverable with null verificationData", () => {
+    const result = verifyBulkDeliverables([
+      makeRow({ id: "d-1", verificationData: null }),
+    ]);
+
+    expect(result.totalChecked).toBe(1);
+    expect(result.reports[0].checks.length).toBeGreaterThan(0);
+  });
+
+  it("handles deliverable with empty verificationData", () => {
+    const result = verifyBulkDeliverables([
+      makeRow({ id: "d-1", verificationData: {} }),
+    ]);
+
+    expect(result.totalChecked).toBe(1);
+  });
+
+  it("handles deliverable with extra fields in verificationData", () => {
+    const result = verifyBulkDeliverables([
+      makeRow({
+        id: "d-1",
+        title: "Ad Read",
+        status: "in_progress",
+        verificationData: { unknownField: "value", anotherField: 42 },
+      }),
+    ]);
+
+    expect(result.totalChecked).toBe(1);
+    expect(result.pending).toBe(1);
+  });
+
+  it("handles deliverable with all statuses represented", () => {
+    const future = new Date();
+    future.setDate(future.getDate() + 10);
+
+    const result = verifyBulkDeliverables([
+      makeRow({ id: "d-1", status: "verified", dueDate: future.toISOString() }),
+      makeRow({
+        id: "d-2",
+        status: "in_progress",
+        title: "Ad Read",
+        verificationData: { adDurationSeconds: 10, requiredDurationSeconds: 30, sponsorMentioned: false },
+        dueDate: future.toISOString(),
+      }),
+      makeRow({ id: "d-3", status: "pending" }),
+      makeRow({ id: "d-4", status: "submitted", dueDate: future.toISOString() }),
+    ]);
+
+    expect(result.totalChecked).toBe(4);
+    expect(result.passed).toBeGreaterThanOrEqual(1);
+    expect(result.failed).toBe(1);
+    expect(result.pending).toBeGreaterThanOrEqual(1);
+  });
+
+  it("counts overdue correctly across mixed deadlines", () => {
+    const past = new Date();
+    past.setDate(past.getDate() - 1);
+    const future = new Date();
+    future.setDate(future.getDate() + 10);
+
+    const result = verifyBulkDeliverables([
+      makeRow({ id: "d-1", status: "pending", dueDate: past.toISOString() }),
+      makeRow({ id: "d-2", status: "pending", dueDate: future.toISOString() }),
+      makeRow({ id: "d-3", status: "pending", dueDate: null }),
+    ]);
+
+    expect(result.overdueAlerts).toBe(1);
+  });
+
+  it("each report has a verifiedAt date", () => {
+    const result = verifyBulkDeliverables([makeRow(), makeRow()]);
+
+    for (const report of result.reports) {
+      expect(report.verifiedAt).toBeInstanceOf(Date);
+    }
+  });
+
+  it("each report has a non-empty summary", () => {
+    const result = verifyBulkDeliverables([makeRow()]);
+
+    expect(result.reports[0].summary).toBeTruthy();
+    expect(typeof result.reports[0].summary).toBe("string");
+  });
 });

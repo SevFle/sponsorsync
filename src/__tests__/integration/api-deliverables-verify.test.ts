@@ -180,4 +180,168 @@ describe("POST /api/deliverables/verify", () => {
     const response = await POST(request);
     expect(response.status).toBe(400);
   });
+
+  it("rejects missing required fields", async () => {
+    const request = new Request("http://localhost:3000/api/deliverables/verify", {
+      method: "POST",
+      body: JSON.stringify({}),
+      headers: { "Content-Type": "application/json" },
+    });
+
+    const response = await POST(request);
+    expect(response.status).toBe(400);
+    const body = await response.json();
+    expect(body.error).toBe("Validation failed");
+    expect(body.details).toBeDefined();
+  });
+
+  it("rejects invalid status enum", async () => {
+    const payload = {
+      deliverableId: "550e8400-e29b-41d4-a716-446655440000",
+      dealId: "660e8400-e29b-41d4-a716-446655440001",
+      dealTitle: "Deal",
+      title: "Item",
+      status: "invalid_status",
+    };
+    const request = new Request("http://localhost:3000/api/deliverables/verify", {
+      method: "POST",
+      body: JSON.stringify(payload),
+      headers: { "Content-Type": "application/json" },
+    });
+
+    const response = await POST(request);
+    expect(response.status).toBe(400);
+  });
+
+  it("accepts all valid status values", async () => {
+    for (const status of ["pending", "in_progress", "submitted", "verified", "missed"]) {
+      const payload = {
+        deliverableId: "550e8400-e29b-41d4-a716-446655440000",
+        dealId: "660e8400-e29b-41d4-a716-446655440001",
+        dealTitle: "Deal",
+        title: "Ad Read",
+        status,
+      };
+      const request = new Request("http://localhost:3000/api/deliverables/verify", {
+        method: "POST",
+        body: JSON.stringify(payload),
+        headers: { "Content-Type": "application/json" },
+      });
+
+      const response = await POST(request);
+      expect(response.status).toBe(200);
+      const body = await response.json();
+      expect(body.report).toBeDefined();
+    }
+  });
+
+  it("accepts valid deliverableType values", async () => {
+    for (const type of ["ad_read", "link_placement", "social_mention"]) {
+      const payload = {
+        deliverableId: "550e8400-e29b-41d4-a716-446655440000",
+        dealId: "660e8400-e29b-41d4-a716-446655440001",
+        dealTitle: "Deal",
+        title: "Generic",
+        status: "pending",
+        deliverableType: type,
+      };
+      const request = new Request("http://localhost:3000/api/deliverables/verify", {
+        method: "POST",
+        body: JSON.stringify(payload),
+        headers: { "Content-Type": "application/json" },
+      });
+
+      const response = await POST(request);
+      expect(response.status).toBe(200);
+      const body = await response.json();
+      expect(body.report.deliverableType).toBe(type);
+    }
+  });
+
+  it("handles optional nullable fields as null", async () => {
+    const payload = {
+      deliverableId: "550e8400-e29b-41d4-a716-446655440000",
+      dealId: "660e8400-e29b-41d4-a716-446655440001",
+      dealTitle: "Deal",
+      title: "Ad Read",
+      status: "pending",
+      description: null,
+      dueDate: null,
+      completedDate: null,
+      verificationData: null,
+      notes: null,
+    };
+    const request = new Request("http://localhost:3000/api/deliverables/verify", {
+      method: "POST",
+      body: JSON.stringify(payload),
+      headers: { "Content-Type": "application/json" },
+    });
+
+    const response = await POST(request);
+    expect(response.status).toBe(200);
+    const body = await response.json();
+    expect(body.report.deadlineStatus).toBe("no_deadline");
+  });
+
+  it("handles verificationData as object", async () => {
+    const payload = {
+      deliverableId: "550e8400-e29b-41d4-a716-446655440000",
+      dealId: "660e8400-e29b-41d4-a716-446655440001",
+      dealTitle: "Deal",
+      title: "Ad Read",
+      status: "in_progress",
+      verificationData: {
+        episodePublished: true,
+        episodeUrl: "https://podcast.com/ep1",
+        adDurationSeconds: 45,
+        sponsorMentioned: true,
+      },
+    };
+    const request = new Request("http://localhost:3000/api/deliverables/verify", {
+      method: "POST",
+      body: JSON.stringify(payload),
+      headers: { "Content-Type": "application/json" },
+    });
+
+    const response = await POST(request);
+    expect(response.status).toBe(200);
+    const body = await response.json();
+    expect(body.report.overallStatus).toBe("pass");
+  });
+
+  it("handles empty string dealTitle", async () => {
+    const payload = {
+      deliverableId: "550e8400-e29b-41d4-a716-446655440000",
+      dealId: "660e8400-e29b-41d4-a716-446655440001",
+      dealTitle: "",
+      title: "Ad Read",
+      status: "pending",
+    };
+    const request = new Request("http://localhost:3000/api/deliverables/verify", {
+      method: "POST",
+      body: JSON.stringify(payload),
+      headers: { "Content-Type": "application/json" },
+    });
+
+    const response = await POST(request);
+    expect(response.status).toBe(400);
+  });
+
+  it("rejects non-UUID deliverableId", async () => {
+    const payload = {
+      deliverableId: "not-a-uuid",
+      dealId: "660e8400-e29b-41d4-a716-446655440001",
+      dealTitle: "Deal",
+      title: "Ad Read",
+      status: "pending",
+    };
+    const request = new Request("http://localhost:3000/api/deliverables/verify", {
+      method: "POST",
+      body: JSON.stringify(payload),
+      headers: { "Content-Type": "application/json" },
+    });
+
+    const response = await POST(request);
+    expect(response.status).toBe(400);
+  });
 });

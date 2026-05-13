@@ -59,6 +59,28 @@ describe("computeDeadlineStatus", () => {
     past.setDate(past.getDate() - 10);
     expect(computeDeadlineStatus(past.toISOString(), null, "verified")).toBe("completed");
   });
+
+  it("returns completed for submitted status even with overdue dueDate", () => {
+    const past = new Date();
+    past.setDate(past.getDate() - 10);
+    expect(computeDeadlineStatus(past.toISOString(), null, "submitted")).toBe("completed");
+  });
+
+  it("returns completed when completedDate is set regardless of status", () => {
+    const past = new Date();
+    past.setDate(past.getDate() - 5);
+    expect(computeDeadlineStatus(past.toISOString(), "2024-01-01", "in_progress")).toBe("completed");
+  });
+
+  it("returns on_track at exactly 4 days", () => {
+    const in4Days = new Date();
+    in4Days.setDate(in4Days.getDate() + 4);
+    expect(computeDeadlineStatus(in4Days.toISOString(), null, "pending")).toBe("on_track");
+  });
+
+  it("handles iso date strings", () => {
+    expect(computeDeadlineStatus("2099-12-31", null, "pending")).toBe("on_track");
+  });
 });
 
 function makeContext(overrides: Partial<VerificationContext> = {}): VerificationContext {

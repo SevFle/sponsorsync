@@ -197,3 +197,77 @@ describe("sendSponsorCommunication", () => {
     expect(result).toEqual({ id: "email-id-123" });
   });
 });
+
+describe("email template error handling", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("sendDeadlineReminder propagates Resend API errors", async () => {
+    sendMock.mockRejectedValueOnce(new Error("API rate limit exceeded"));
+
+    await expect(
+      sendDeadlineReminder("user@test.com", "Deal", "2025-01-01")
+    ).rejects.toThrow("API rate limit exceeded");
+  });
+
+  it("sendOverdueDeliverableReminder propagates Resend API errors", async () => {
+    sendMock.mockRejectedValueOnce(new Error("Network timeout"));
+
+    await expect(
+      sendOverdueDeliverableReminder("user@test.com", "Deal", "Deliv", "Jan 1")
+    ).rejects.toThrow("Network timeout");
+  });
+
+  it("sendPaymentFollowUp propagates Resend API errors", async () => {
+    sendMock.mockRejectedValueOnce(new Error("Invalid API key"));
+
+    await expect(
+      sendPaymentFollowUp("user@test.com", "Deal", "$100", "Jan 1")
+    ).rejects.toThrow("Invalid API key");
+  });
+
+  it("sendSponsorCommunication propagates Resend API errors", async () => {
+    sendMock.mockRejectedValueOnce(new Error("Domain not verified"));
+
+    await expect(
+      sendSponsorCommunication("sponsor@test.com", "Sub", "body")
+    ).rejects.toThrow("Domain not verified");
+  });
+
+  it("handles empty strings in sendDeadlineReminder", async () => {
+    await sendDeadlineReminder("", "", "");
+    expect(sendMock).toHaveBeenCalledWith(
+      expect.objectContaining({ to: "", subject: "Deadline Reminder: ", html: expect.any(String) })
+    );
+  });
+
+  it("handles empty strings in sendSponsorCommunication", async () => {
+    await sendSponsorCommunication("", "", "");
+    expect(sendMock).toHaveBeenCalledWith(
+      expect.objectContaining({ to: "", subject: "", html: "" })
+    );
+  });
+
+  it("handles special characters in email fields", async () => {
+    await sendSponsorCommunication(
+      "user+test@test.com",
+      "Hello <script>alert('xss')</script>",
+      "<p>O'Brien said \"hello\" & goodbye</p>"
+    );
+    expect(sendMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        to: "user+test@test.com",
+        subject: "Hello <script>alert('xss')</script>",
+        html: "<p>O'Brien said \"hello\" & goodbye</p>",
+      })
+    );
+  });
+
+  it("handles unicode in subject and body", async () => {
+    await sendSponsorCommunication("user@test.com", "こんにちは 🎉", "<p>Ünïcödé</p>");
+    expect(sendMock).toHaveBeenCalledWith(
+      expect.objectContaining({ subject: "こんにちは 🎉", html: "<p>Ünïcödé</p>" })
+    );
+  });
+});
