@@ -121,6 +121,7 @@ export async function processDeliverableVerification(): Promise<VerificationRunS
       summary.errors.push(
         `Error processing user ${user.userId}: ${error instanceof Error ? error.message : "Unknown error"}`
       );
+      summary.usersProcessed++;
     }
   }
 
