@@ -1,6 +1,43 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi, beforeEach } from "vitest";
 import { GET, POST } from "@/app/api/templates/route";
 import { GET as GetById, PATCH, DELETE } from "@/app/api/templates/[id]/route";
+
+vi.mock("next-auth", () => ({
+  getServerSession: vi.fn(),
+}));
+
+vi.mock("@/lib/auth/config", () => ({
+  authOptions: {},
+}));
+
+import { getServerSession } from "next-auth";
+
+const mockSession = { user: { id: "user-1", email: "test@test.com", name: "Test User" } };
+
+function mockAuth(session: typeof mockSession | null) {
+  (getServerSession as ReturnType<typeof vi.fn>).mockResolvedValue(session);
+}
+
+beforeEach(() => {
+  vi.clearAllMocks();
+  mockAuth(mockSession);
+});
+
+describe("GET /api/templates - auth guards", () => {
+  it("returns 401 when not authenticated", async () => {
+    mockAuth(null);
+    const response = await GET();
+    expect(response.status).toBe(401);
+    const body = await response.json();
+    expect(body.error).toBe("Unauthorized");
+  });
+
+  it("returns 401 when session has no user id", async () => {
+    mockAuth({ user: {} } as any);
+    const response = await GET();
+    expect(response.status).toBe(401);
+  });
+});
 
 describe("GET /api/templates", () => {
   it("returns empty templates array", async () => {
@@ -9,6 +46,19 @@ describe("GET /api/templates", () => {
 
     expect(response.status).toBe(200);
     expect(body).toEqual({ templates: [] });
+  });
+});
+
+describe("POST /api/templates - auth guards", () => {
+  it("returns 401 when not authenticated", async () => {
+    mockAuth(null);
+    const request = new Request("http://localhost:3000/api/templates", {
+      method: "POST",
+      body: JSON.stringify({ name: "Test" }),
+      headers: { "Content-Type": "application/json" },
+    });
+    const response = await POST(request);
+    expect(response.status).toBe(401);
   });
 });
 
@@ -34,6 +84,17 @@ describe("POST /api/templates", () => {
   });
 });
 
+describe("GET /api/templates/[id] - auth guards", () => {
+  it("returns 401 when not authenticated", async () => {
+    mockAuth(null);
+    const response = await GetById(
+      new Request("http://localhost:3000/api/templates/tmpl-789"),
+      { params: Promise.resolve({ id: "tmpl-789" }) }
+    );
+    expect(response.status).toBe(401);
+  });
+});
+
 describe("GET /api/templates/[id]", () => {
   it("returns template with matching id", async () => {
     const response = await GetById(
@@ -44,6 +105,19 @@ describe("GET /api/templates/[id]", () => {
 
     expect(response.status).toBe(200);
     expect(body.template).toEqual({ id: "tmpl-789" });
+  });
+});
+
+describe("PATCH /api/templates/[id] - auth guards", () => {
+  it("returns 401 when not authenticated", async () => {
+    mockAuth(null);
+    const request = new Request("http://localhost:3000/api/templates/tmpl-789", {
+      method: "PATCH",
+      body: JSON.stringify({ name: "Test" }),
+      headers: { "Content-Type": "application/json" },
+    });
+    const response = await PATCH(request, { params: Promise.resolve({ id: "tmpl-789" }) });
+    expect(response.status).toBe(401);
   });
 });
 
@@ -61,6 +135,17 @@ describe("PATCH /api/templates/[id]", () => {
 
     expect(response.status).toBe(200);
     expect(body.template).toEqual({ id: "tmpl-789", name: "Updated Template" });
+  });
+});
+
+describe("DELETE /api/templates/[id] - auth guards", () => {
+  it("returns 401 when not authenticated", async () => {
+    mockAuth(null);
+    const response = await DELETE(
+      new Request("http://localhost:3000/api/templates/tmpl-789", { method: "DELETE" }),
+      { params: Promise.resolve({ id: "tmpl-789" }) }
+    );
+    expect(response.status).toBe(401);
   });
 });
 

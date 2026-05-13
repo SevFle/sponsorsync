@@ -41,6 +41,7 @@ export default function NewSponsorPage() {
         try {
           const res = await fetch("/api/sponsors", {
             method: "POST",
+            credentials: "include",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
               name: name.trim() || undefined,
