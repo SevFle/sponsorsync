@@ -5,6 +5,7 @@ export const deliverableStatusEnum = pgEnum("deliverable_status", ["pending", "i
 export const paymentStatusEnum = pgEnum("payment_status", ["pending", "paid", "overdue", "cancelled"]);
 export const integrationPlatformEnum = pgEnum("integration_platform", ["buzzsprout", "transistor", "anchor", "convertkit", "mailchimp"]);
 export const subscriptionStatusEnum = pgEnum("subscription_status", ["free", "active", "past_due", "canceled", "trialing", "paused"]);
+export const verificationActionEnum = pgEnum("verification_action", ["auto_complete", "manual_review", "overdue_alert", "verification_failed", "verification_passed"]);
 
 export const PLANS = {
   starter: { name: "Starter", price: 1900 },
@@ -159,4 +160,21 @@ export const sessions = pgTable("sessions", {
   sessionToken: text("session_token").notNull().unique(),
   userId: uuid("user_id").references(() => users.id).notNull(),
   expires: timestamp("expires").notNull(),
+});
+
+export const verificationLogs = pgTable("verification_logs", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  deliverableId: uuid("deliverable_id").references(() => deliverables.id).notNull(),
+  dealId: uuid("deal_id").references(() => deals.id),
+  userId: uuid("user_id").references(() => users.id).notNull(),
+  episodeId: text("episode_id"),
+  action: verificationActionEnum("action").notNull(),
+  confidence: integer("confidence").notNull(),
+  placement: varchar("placement", { length: 20 }),
+  keywordMatchCount: integer("keyword_match_count").default(0).notNull(),
+  keywordTotalCount: integer("keyword_total_count").default(0).notNull(),
+  previousStatus: deliverableStatusEnum("previous_status"),
+  newStatus: deliverableStatusEnum("new_status"),
+  metadata: jsonb("metadata"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
 });
