@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { apiFetch, ApiError } from "@/lib/api-client";
@@ -8,6 +8,12 @@ import { apiFetch, ApiError } from "@/lib/api-client";
 export default function NewSponsorPage() {
   const { status: sessionStatus } = useSession();
   const router = useRouter();
+
+  useEffect(() => {
+    if (sessionStatus === "unauthenticated") {
+      router.replace("/login");
+    }
+  }, [sessionStatus, router]);
 
   const [name, setName] = useState("");
   const [company, setCompany] = useState("");
@@ -66,7 +72,9 @@ export default function NewSponsorPage() {
     }
   };
 
-  if (sessionStatus !== "authenticated") return null;
+  if (sessionStatus !== "authenticated") {
+    return null;
+  }
 
   return (
     <div>

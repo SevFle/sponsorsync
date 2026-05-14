@@ -1,6 +1,12 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { apiFetch, ApiError } from "@/lib/api-client";
 
+vi.mock("@/lib/auth/redirect", () => ({
+  redirectToLogin: vi.fn(),
+}));
+
+import { redirectToLogin } from "@/lib/auth/redirect";
+
 beforeEach(() => {
   vi.restoreAllMocks();
 });
@@ -369,6 +375,55 @@ describe("apiFetch - return types", () => {
 
     const result = await apiFetch("/api/test");
     expect(result).toBeNull();
+  });
+});
+
+describe("apiFetch - 401 redirect to login", () => {
+  it("calls redirectToLogin on 401 response", async () => {
+    const mockFetch = vi.fn().mockResolvedValue({
+      ok: false,
+      status: 401,
+      statusText: "Unauthorized",
+      json: vi.fn().mockResolvedValue({ error: "Unauthorized" }),
+    });
+    vi.stubGlobal("fetch", mockFetch);
+
+    try {
+      await apiFetch("/api/protected");
+    } catch (e) {
+      expect((e as ApiError).status).toBe(401);
+    }
+
+    expect(redirectToLogin).toHaveBeenCalledTimes(1);
+  });
+
+  it("still throws ApiError on 401 after redirect", async () => {
+    const mockFetch = vi.fn().mockResolvedValue({
+      ok: false,
+      status: 401,
+      statusText: "Unauthorized",
+      json: vi.fn().mockResolvedValue({ error: "Unauthorized" }),
+    });
+    vi.stubGlobal("fetch", mockFetch);
+
+    await expect(apiFetch("/api/protected")).rejects.toThrow(ApiError);
+    await expect(apiFetch("/api/protected")).rejects.toThrow("Unauthorized");
+  });
+
+  it("does not call redirectToLogin on non-401 errors", async () => {
+    const mockFetch = vi.fn().mockResolvedValue({
+      ok: false,
+      status: 500,
+      statusText: "Internal Server Error",
+      json: vi.fn().mockResolvedValue({ error: "Server error" }),
+    });
+    vi.stubGlobal("fetch", mockFetch);
+
+    try {
+      await apiFetch("/api/fail");
+    } catch {}
+
+    expect(redirectToLogin).not.toHaveBeenCalled();
   });
 });
 

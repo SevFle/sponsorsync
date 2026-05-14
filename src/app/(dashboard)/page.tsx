@@ -7,10 +7,7 @@ import { MetricCard } from "@/components/dashboard/metric-card";
 import { DeadlineRow } from "@/components/dashboard/deadline-row";
 import { ActivityRow } from "@/components/dashboard/activity-row";
 import { formatCurrency } from "@/lib/format";
-import { getDealsByUserId } from "@/lib/db/queries/deals";
-import { getDeliverablesByUserId } from "@/lib/db/queries/deliverables";
-import { getPaymentsByUserId } from "@/lib/db/queries/payments";
-import { computeDashboardMetrics } from "@/lib/dashboard/metrics";
+import { getDashboardData } from "@/lib/dashboard/data";
 import type { DashboardDeliverable, DashboardPayment } from "@/types/dashboard";
 
 function getUpcomingDeliverables(deliverables: DashboardDeliverable[]) {
@@ -41,13 +38,7 @@ export default async function DashboardPage() {
 
   const userId = session.user.id;
 
-  const [deals, deliverables, payments] = await Promise.all([
-    getDealsByUserId(userId),
-    getDeliverablesByUserId(userId),
-    getPaymentsByUserId(userId),
-  ]);
-
-  const metrics = computeDashboardMetrics(deals, deliverables, payments);
+  const { deals, deliverables, payments, metrics } = await getDashboardData(userId);
 
   const upcomingDeliverables = getUpcomingDeliverables(deliverables as DashboardDeliverable[]);
   const recentActivity = getRecentActivity(

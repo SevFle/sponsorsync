@@ -1,3 +1,5 @@
+import { redirectToLogin } from "@/lib/auth/redirect";
+
 function getCsrfToken(): string | undefined {
   if (typeof document === "undefined") return undefined;
   const match = document.cookie.match(/(?:^|;\s*)csrfToken\s*=\s*([^;]*)/);
@@ -30,6 +32,11 @@ export async function apiFetch<T = unknown>(
     credentials: "include",
     headers,
   });
+
+  if (response.status === 401) {
+    redirectToLogin();
+    throw new ApiError(401, "Unauthorized");
+  }
 
   if (!response.ok) {
     const body = await response.json().catch(() => ({}));
