@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="en" dir="ltr">
+<head><meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1.0" /></head>
+<body style="margin: 0; padding: 0; background-color: #f9fafb; font-family: 'Helvetica Neue', Arial, sans-serif;">
+<div style="max-width: 600px; margin: 0 auto; padding: 40px 20px;">
+  <div style="background-color: #2563eb; padding: 32px 40px; border-radius: 12px 12px 0 0;">
+    <h1 style="margin: 0; color: #ffffff; font-size: 20px; font-weight: 700;">{{creator_show}}</h1>
+  </div>
+  <div style="background-color: #ffffff; padding: 40px; border: 1px solid #e5e7eb;">
+    <div style="display: inline-block; background-color: #fffbeb; border-radius: 6px; padding: 6px 16px; margin-bottom: 24px;">
+      <span style="color: #d97706; font-size: 14px; font-weight: 600;">Payment Reminder</span>
+    </div>
+    <h2 style="margin: 0 0 24px; color: #1f2937; font-size: 24px; font-weight: 700;">Invoice {{invoice_number}}</h2>
+    <p style="margin: 0 0 16px; color: #1f2937; font-size: 16px; line-height: 1.6;">Hi {{sponsor_name}},</p>
+    <p style="margin: 0 0 16px; color: #1f2937; font-size: 16px; line-height: 1.6;">This is a friendly reminder that invoice <strong>{{invoice_number}}</strong> for <strong>{{invoice_amount}}</strong> is due on <strong>{{payment_due_date}}</strong>.</p>
+    <hr style="margin: 24px 0; border: none; border-top: 1px solid #e5e7eb;" />
+    <table style="width: 100%; font-size: 14px;">
+      <tr><td style="color: #6b7280; padding: 8px 0; width: 40%;">Invoice</td><td style="color: #1f2937; font-weight: 600; padding: 8px 0;">{{invoice_number}}</td></tr>
+      <tr><td style="color: #6b7280; padding: 8px 0;">Amount</td><td style="color: #1f2937; font-weight: 600; padding: 8px 0;">{{invoice_amount}}</td></tr>
+      <tr><td style="color: #6b7280; padding: 8px 0;">Due Date</td><td style="color: #1f2937; font-weight: 600; padding: 8px 0;">{{payment_due_date}}</td></tr>
+    </table>
+    <hr style="margin: 24px 0; border: none; border-top: 1px solid #e5e7eb;" />
+    <p style="margin: 0; color: #1f2937; font-size: 16px; line-height: 1.6;">Best,<br /><strong>{{creator_name}}</strong><br />{{creator_show}}</p>
+  </div>
+  <div style="padding: 16px 0; text-align: center;">
+    <p style="margin: 0; color: #6b7280; font-size: 12px;">Sent via <a href="https://sponsorsync.app" style="color: #2563eb;">SponsorSync</a></p>
+  </div>
+</div>
+</body>
+</html>

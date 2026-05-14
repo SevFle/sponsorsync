@@ -312,7 +312,7 @@ describe("Unauthenticated access rejection - all protected API routes", () => {
 
   it("GET /api/templates returns 401", async () => {
     const { GET } = await import("@/app/api/templates/route");
-    const res = await GET();
+    const res = await GET(new Request("http://localhost:3000/api/templates"));
     expect(res.status).toBe(401);
   });
 
@@ -473,7 +473,7 @@ describe("Unauthenticated access - session without user.id", () => {
 
   it("GET /api/templates returns 401", async () => {
     const { GET } = await import("@/app/api/templates/route");
-    const res = await GET();
+    const res = await GET(new Request("http://localhost:3000/api/templates"));
     expect(res.status).toBe(401);
   });
 

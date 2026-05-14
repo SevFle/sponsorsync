@@ -10,6 +10,16 @@ vi.mock("@/lib/auth/config", () => ({
   authOptions: {},
 }));
 
+vi.mock("@/lib/db/queries/templates", () => ({
+  getTemplatesByUserIdFiltered: vi.fn().mockResolvedValue([]),
+  createTemplate: vi.fn().mockImplementation((data) => data),
+  getTemplateById: vi.fn().mockImplementation((id: string) => ({ id })),
+  updateTemplate: vi.fn().mockImplementation((id: string, data: Record<string, unknown>) => ({ id, ...data })),
+  deleteTemplate: vi.fn().mockResolvedValue({ id: "deleted" }),
+  getDefaultTemplates: vi.fn().mockResolvedValue([]),
+  getTemplatesByUserId: vi.fn().mockResolvedValue([]),
+}));
+
 import { getServerSession } from "next-auth";
 
 const mockSession = { user: { id: "user-1", email: "test@test.com", name: "Test User" } };
@@ -26,7 +36,7 @@ beforeEach(() => {
 describe("GET /api/templates - auth guards", () => {
   it("returns 401 when not authenticated", async () => {
     mockAuth(null);
-    const response = await GET();
+    const response = await GET(new Request("http://localhost:3000/api/templates"));
     expect(response.status).toBe(401);
     const body = await response.json();
     expect(body.error).toBe("Unauthorized");
@@ -34,14 +44,14 @@ describe("GET /api/templates - auth guards", () => {
 
   it("returns 401 when session has no user id", async () => {
     mockAuth({ user: {} } as any);
-    const response = await GET();
+    const response = await GET(new Request("http://localhost:3000/api/templates"));
     expect(response.status).toBe(401);
   });
 });
 
 describe("GET /api/templates", () => {
   it("returns empty templates array", async () => {
-    const response = await GET();
+    const response = await GET(new Request("http://localhost:3000/api/templates"));
     const body = await response.json();
 
     expect(response.status).toBe(200);
@@ -80,7 +90,7 @@ describe("POST /api/templates", () => {
     const body = await response.json();
 
     expect(response.status).toBe(201);
-    expect(body.template).toEqual(templateData);
+    expect(body.template).toEqual(expect.objectContaining(templateData));
   });
 });
 
@@ -180,7 +190,7 @@ describe("POST /api/templates edge cases", () => {
     const body = await response.json();
 
     expect(response.status).toBe(201);
-    expect(body.template).toEqual(templateData);
+    expect(body.template).toEqual(expect.objectContaining(templateData));
   });
 
   it("handles template with minimal fields", async () => {

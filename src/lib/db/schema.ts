@@ -104,6 +104,7 @@ export const templates = pgTable("templates", {
   subject: text("subject"),
   body: text("body").notNull(),
   category: varchar("category", { length: 50 }),
+  isDefault: boolean("is_default").default(false).notNull(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
