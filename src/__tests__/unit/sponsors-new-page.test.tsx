@@ -19,10 +19,12 @@ vi.mock("@/lib/api-client", () => ({
   apiFetch: vi.fn(),
   ApiError: class ApiError extends Error {
     status: number;
-    constructor(status: number, message: string) {
+    body: Record<string, unknown>;
+    constructor(status: number, message: string, body: Record<string, unknown> = {}) {
       super(message);
       this.name = "ApiError";
       this.status = status;
+      this.body = body;
     }
   },
 }));

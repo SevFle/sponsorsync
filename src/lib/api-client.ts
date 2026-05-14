@@ -40,7 +40,7 @@ export async function apiFetch<T = unknown>(
 
   if (!response.ok) {
     const body = await response.json().catch(() => ({}));
-    throw new ApiError(response.status, body.error ?? response.statusText);
+    throw new ApiError(response.status, body.error ?? response.statusText, body);
   }
 
   return response.json() as Promise<T>;
@@ -48,10 +48,12 @@ export async function apiFetch<T = unknown>(
 
 export class ApiError extends Error {
   status: number;
+  body: Record<string, unknown>;
 
-  constructor(status: number, message: string) {
+  constructor(status: number, message: string, body: Record<string, unknown> = {}) {
     super(message);
     this.name = "ApiError";
     this.status = status;
+    this.body = body;
   }
 }

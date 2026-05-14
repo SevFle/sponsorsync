@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { apiFetch, ApiError } from "@/lib/api-client";
 
 interface NotificationPreferences {
   deadlineReminders: boolean;
@@ -25,8 +26,7 @@ export default function NotificationSettingsPage() {
 
   async function fetchPreferences() {
     try {
-      const res = await fetch("/api/settings/notifications");
-      const data = await res.json();
+      const data = await apiFetch<{ preferences: NotificationPreferences }>("/api/settings/notifications");
       if (data.preferences) {
         setPrefs(data.preferences);
         setScheduleInput(
@@ -51,27 +51,20 @@ export default function NotificationSettingsPage() {
       .filter((n) => !isNaN(n) && n >= 1 && n <= 30);
 
     try {
-      const res = await fetch("/api/settings/notifications", {
+      const data = await apiFetch<{ preferences: NotificationPreferences }>("/api/settings/notifications", {
         method: "PUT",
-        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           ...prefs,
           reminderSchedule: scheduleParts.length > 0 ? scheduleParts : undefined,
         }),
       });
 
-      if (!res.ok) {
-        const data = await res.json();
-        throw new Error(data.error ?? "Failed to save");
-      }
-
-      const data = await res.json();
       setPrefs(data.preferences);
       setMessage({ type: "success", text: "Preferences saved" });
     } catch (err) {
       setMessage({
         type: "error",
-        text: err instanceof Error ? err.message : "Failed to save preferences",
+        text: err instanceof ApiError ? err.message : err instanceof Error ? err.message : "Failed to save preferences",
       });
     } finally {
       setSaving(false);

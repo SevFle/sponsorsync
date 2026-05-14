@@ -2,15 +2,19 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 
 const mocks = vi.hoisted(() => ({
   createNotification: vi.fn(),
+  notificationKeyExists: vi.fn().mockResolvedValue(false),
   sendDeadlineReminder: vi.fn().mockResolvedValue({ id: "email-1" }),
   sendOverdueDeliverableReminder: vi.fn().mockResolvedValue({ id: "email-2" }),
+  sendTemplatedEmail: vi.fn().mockResolvedValue({ id: "templated-email-1" }),
 }));
 
 function createQueryResult(value: any) {
-  return {
+  const self: any = {
     then: (resolve: any, reject: any) => Promise.resolve(value).then(resolve, reject),
-    where: vi.fn().mockResolvedValue(value),
+    where: vi.fn().mockImplementation(() => createQueryResult(value)),
+    limit: vi.fn().mockImplementation(() => createQueryResult(value)),
   };
+  return self;
 }
 
 vi.mock("@/lib/db", () => ({
@@ -26,6 +30,7 @@ vi.mock("@/lib/db/schema", () => ({
     deadlineReminders: "deadline_reminders",
     deliverableUpdates: "deliverable_updates",
     reminderDaysBefore: "reminder_days_before",
+    reminderSchedule: "reminder_schedule",
   },
   deliverables: {
     id: "id",
@@ -34,7 +39,8 @@ vi.mock("@/lib/db/schema", () => ({
     status: "status",
     dealId: "deal_id",
   },
-  deals: { id: "id", title: "title", userId: "user_id" },
+  deals: { id: "id", title: "title", userId: "user_id", sponsorId: "sponsor_id" },
+  sponsors: { id: "id", name: "name" },
 }));
 
 vi.mock("drizzle-orm", () => ({
@@ -47,11 +53,16 @@ vi.mock("drizzle-orm", () => ({
 
 vi.mock("@/lib/db/queries/notifications", () => ({
   createNotification: mocks.createNotification,
+  notificationKeyExists: mocks.notificationKeyExists,
 }));
 
 vi.mock("@/lib/email/templates", () => ({
   sendDeadlineReminder: mocks.sendDeadlineReminder,
   sendOverdueDeliverableReminder: mocks.sendOverdueDeliverableReminder,
+}));
+
+vi.mock("@/lib/email/client", () => ({
+  sendTemplatedEmail: mocks.sendTemplatedEmail,
 }));
 
 import { processDeadlineChecks } from "@/lib/inngest/deadline-checker";
@@ -110,11 +121,12 @@ describe("processDeadlineChecks", () => {
           dealId: "deal-1",
           dealTitle: "Big Sponsor",
         },
-      ]
+      ],
+      [{ name: "Big Sponsor" }]
     );
 
     mocks.createNotification.mockResolvedValue({ id: "notif-1" });
-    mocks.sendDeadlineReminder.mockResolvedValue({ id: "email-1" });
+    mocks.sendTemplatedEmail.mockResolvedValue({ id: "email-1" });
 
     const result = await processDeadlineChecks();
     expect(result.notificationsCreated).toBe(1);
@@ -124,8 +136,12 @@ describe("processDeadlineChecks", () => {
       expect.objectContaining({
         userId: "user-1",
         type: "deadline_reminder",
-        title: "Upcoming Deadline",
       })
+    );
+    expect(mocks.sendTemplatedEmail).toHaveBeenCalledWith(
+      "deliverable-reminder",
+      expect.objectContaining({ isOverdue: false }),
+      { to: "creator@test.com" }
     );
   });
 
@@ -141,11 +157,12 @@ describe("processDeadlineChecks", () => {
           dealId: "deal-2",
           dealTitle: "Late Sponsor",
         },
-      ]
+      ],
+      [{ name: "Late Sponsor" }]
     );
 
     mocks.createNotification.mockResolvedValue({ id: "notif-2" });
-    mocks.sendOverdueDeliverableReminder.mockResolvedValue({ id: "email-2" });
+    mocks.sendTemplatedEmail.mockResolvedValue({ id: "email-2" });
 
     const result = await processDeadlineChecks();
     expect(result.notificationsCreated).toBe(1);
@@ -155,7 +172,11 @@ describe("processDeadlineChecks", () => {
         title: "Overdue Deliverable",
       })
     );
-    expect(mocks.sendOverdueDeliverableReminder).toHaveBeenCalled();
+    expect(mocks.sendTemplatedEmail).toHaveBeenCalledWith(
+      "deliverable-reminder",
+      expect.objectContaining({ isOverdue: true }),
+      { to: "creator@test.com" }
+    );
   });
 
   it("skips email when user has no email address", async () => {
@@ -193,11 +214,12 @@ describe("processDeadlineChecks", () => {
           dealId: "deal-1",
           dealTitle: "Sponsor",
         },
-      ]
+      ],
+      [{ name: "Sponsor" }]
     );
 
     mocks.createNotification.mockResolvedValue({ id: "notif-1" });
-    mocks.sendDeadlineReminder.mockRejectedValue(new Error("SMTP failure"));
+    mocks.sendTemplatedEmail.mockRejectedValue(new Error("SMTP failure"));
 
     const result = await processDeadlineChecks();
     expect(result.errors.length).toBe(1);

@@ -80,24 +80,10 @@ export default function EditSponsorPage({ params }: { params: Promise<{ id: stri
       router.push(`/dashboard/sponsors/${resolvedId}`);
     } catch (err) {
       if (err instanceof ApiError && (err.status === 400 || err.status === 422)) {
-        try {
-          const res = await fetch(`/api/sponsors/${resolvedId}`, {
-            method: "PATCH",
-            credentials: "include",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              name: name.trim() || undefined,
-              company: company.trim() || undefined,
-              email: email.trim() || undefined,
-              phone: phone.trim() || undefined,
-              notes: notes.trim() || undefined,
-            }),
-          });
-          const body = await res.json();
-          if (body.details) {
-            setFieldErrors(body.details);
-          }
-        } catch {
+        const details = err.body?.details as Record<string, string[]> | undefined;
+        if (details) {
+          setFieldErrors(details);
+        } else {
           setError(err.message);
         }
       } else {

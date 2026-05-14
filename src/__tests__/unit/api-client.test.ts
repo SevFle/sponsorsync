@@ -464,4 +464,42 @@ describe("ApiError", () => {
 
     return expect(checkError()).resolves.toBe(500);
   });
+
+  it("defaults body to empty object when not provided", () => {
+    const err = new ApiError(422, "Validation failed");
+    expect(err.body).toEqual({});
+  });
+
+  it("stores response body in body property", () => {
+    const err = new ApiError(422, "Validation failed", {
+      error: "Validation failed",
+      details: { name: ["is required"], email: ["is invalid"] },
+    });
+    expect(err.body).toEqual({
+      error: "Validation failed",
+      details: { name: ["is required"], email: ["is invalid"] },
+    });
+  });
+
+  it("populates body from actual API error response", async () => {
+    const mockFetch = vi.fn().mockResolvedValue({
+      ok: false,
+      status: 422,
+      statusText: "Unprocessable Entity",
+      json: vi.fn().mockResolvedValue({
+        error: "Validation failed",
+        details: { name: ["is required"] },
+      }),
+    });
+    vi.stubGlobal("fetch", mockFetch);
+
+    try {
+      await apiFetch("/api/validate");
+    } catch (e) {
+      expect((e as ApiError).body).toEqual({
+        error: "Validation failed",
+        details: { name: ["is required"] },
+      });
+    }
+  });
 });

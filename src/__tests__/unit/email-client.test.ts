@@ -673,3 +673,513 @@ describe("AVAILABLE_TEMPLATES", () => {
     expect(slugs).toContain("payment-followup");
   });
 });
+
+describe("sendEmail edge cases", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("sends to multiple recipients (array)", async () => {
+    const payload: EmailPayload = {
+      to: ["one@example.com", "two@example.com", "three@example.com"],
+      subject: "Multi",
+      react: React.createElement("div", null, "Body"),
+    };
+
+    await sendEmail(payload);
+    expect(sendMock.mock.calls[0][0].to).toEqual([
+      "one@example.com",
+      "two@example.com",
+      "three@example.com",
+    ]);
+  });
+
+  it("sends with all optional fields populated", async () => {
+    const payload: EmailPayload = {
+      to: "test@example.com",
+      cc: "cc@example.com",
+      bcc: ["bcc1@example.com", "bcc2@example.com"],
+      replyTo: "reply@example.com",
+      subject: "Full",
+      react: React.createElement("div", null, "Body"),
+      scheduledAt: "2025-12-01T09:00:00Z",
+    };
+
+    await sendEmail(payload);
+    const call = sendMock.mock.calls[0][0];
+    expect(call.to).toBe("test@example.com");
+    expect(call.cc).toBe("cc@example.com");
+    expect(call.bcc).toEqual(["bcc1@example.com", "bcc2@example.com"]);
+    expect(call.replyTo).toBe("reply@example.com");
+    expect(call.scheduledAt).toBe("2025-12-01T09:00:00Z");
+    expect(call.from).toBe("SponsorSync <notifications@sponsorsync.app>");
+    expect(call.html).toBeDefined();
+    expect(call.text).toBeDefined();
+  });
+
+  it("omits optional fields when not provided", async () => {
+    const payload: EmailPayload = {
+      to: "test@example.com",
+      subject: "Minimal",
+      react: React.createElement("div", null, "Body"),
+    };
+
+    await sendEmail(payload);
+    const call = sendMock.mock.calls[0][0];
+    expect(call.cc).toBeUndefined();
+    expect(call.bcc).toBeUndefined();
+    expect(call.replyTo).toBeUndefined();
+    expect(call.scheduledAt).toBeUndefined();
+  });
+
+  it("throws with error message from Resend API", async () => {
+    sendMock.mockResolvedValueOnce({
+      data: null,
+      error: { message: "Rate limit exceeded" },
+    });
+
+    await expect(
+      sendEmail({
+        to: "test@example.com",
+        subject: "Test",
+        react: React.createElement("div", null, "Body"),
+      })
+    ).rejects.toThrow("Email delivery failed: Rate limit exceeded");
+  });
+
+  it("throws when Resend returns null data without error", async () => {
+    sendMock.mockResolvedValueOnce({
+      data: null,
+      error: null,
+    });
+
+    await expect(
+      sendEmail({
+        to: "test@example.com",
+        subject: "Test",
+        react: React.createElement("div", null, "Body"),
+      })
+    ).rejects.toThrow();
+  });
+
+  it("sends cc as array of emails", async () => {
+    const payload: EmailPayload = {
+      to: "test@example.com",
+      cc: ["cc1@example.com", "cc2@example.com"],
+      subject: "Test",
+      react: React.createElement("div", null, "Body"),
+    };
+
+    await sendEmail(payload);
+    expect(sendMock.mock.calls[0][0].cc).toEqual(["cc1@example.com", "cc2@example.com"]);
+  });
+
+  it("sends replyTo as array of emails", async () => {
+    const payload: EmailPayload = {
+      to: "test@example.com",
+      replyTo: ["reply1@example.com", "reply2@example.com"],
+      subject: "Test",
+      react: React.createElement("div", null, "Body"),
+    };
+
+    await sendEmail(payload);
+    expect(sendMock.mock.calls[0][0].replyTo).toEqual(["reply1@example.com", "reply2@example.com"]);
+  });
+});
+
+describe("processSendEmailRequest edge cases", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("accepts cc and bcc as arrays", async () => {
+    await processSendEmailRequest({
+      to: "test@example.com",
+      cc: ["cc1@example.com", "cc2@example.com"],
+      bcc: ["bcc1@example.com"],
+      template: "sponsor-outreach",
+      templateData: {
+        sponsorName: "Sponsor",
+        creatorName: "Creator",
+        creatorShow: "Show",
+        proposalSummary: "Summary",
+      },
+    });
+
+    const call = sendMock.mock.calls[0][0];
+    expect(call.cc).toEqual(["cc1@example.com", "cc2@example.com"]);
+    expect(call.bcc).toEqual(["bcc1@example.com"]);
+  });
+
+  it("accepts replyTo parameter", async () => {
+    await processSendEmailRequest({
+      to: "test@example.com",
+      replyTo: "reply@example.com",
+      template: "sponsor-outreach",
+      templateData: {
+        sponsorName: "Sponsor",
+        creatorName: "Creator",
+        creatorShow: "Show",
+        proposalSummary: "Summary",
+      },
+    });
+
+    expect(sendMock.mock.calls[0][0].replyTo).toBe("reply@example.com");
+  });
+
+  it("rejects completely empty input", async () => {
+    await expect(processSendEmailRequest({} as any)).rejects.toThrow(
+      "Invalid email request"
+    );
+  });
+
+  it("rejects numeric template data values for string fields", async () => {
+    await expect(
+      processSendEmailRequest({
+        to: "test@example.com",
+        template: "sponsor-outreach",
+        templateData: { sponsorName: 123 },
+      })
+    ).rejects.toThrow();
+  });
+
+  it("accepts optional sponsorCompany in sponsor-outreach", async () => {
+    await processSendEmailRequest({
+      to: "test@example.com",
+      template: "sponsor-outreach",
+      templateData: {
+        sponsorName: "Sponsor",
+        creatorName: "Creator",
+        creatorShow: "Show",
+        proposalSummary: "Summary",
+        sponsorCompany: "BigCorp",
+      },
+    });
+
+    expect(sendMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("accepts optional dashboardUrl in deal-confirmation", async () => {
+    await processSendEmailRequest({
+      to: "test@example.com",
+      template: "deal-confirmation",
+      templateData: {
+        sponsorName: "Sponsor",
+        dealTitle: "Deal",
+        dealAmount: "$1000",
+        startDate: "Jan 1",
+        endDate: "Mar 31",
+        deliverablesCount: 3,
+        creatorName: "Creator",
+        creatorShow: "Show",
+        dashboardUrl: "https://app.example.com/dashboard",
+      },
+    });
+
+    expect(sendMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("accepts optional invoiceUrl in payment-followup", async () => {
+    await processSendEmailRequest({
+      to: "test@example.com",
+      template: "payment-followup",
+      templateData: {
+        sponsorName: "Sponsor",
+        dealTitle: "Deal",
+        amount: "$500",
+        dueDate: "Feb 1",
+        daysOverdue: 5,
+        creatorName: "Creator",
+        creatorShow: "Show",
+        invoiceUrl: "https://pay.example.com/invoice/1",
+      },
+    });
+
+    expect(sendMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("rejects invalid URL for optional proposalUrl", async () => {
+    await expect(
+      processSendEmailRequest({
+        to: "test@example.com",
+        template: "sponsor-outreach",
+        templateData: {
+          sponsorName: "Sponsor",
+          creatorName: "Creator",
+          creatorShow: "Show",
+          proposalSummary: "Summary",
+          proposalUrl: "not-a-url",
+        },
+      })
+    ).rejects.toThrow();
+  });
+
+  it("rejects negative deliverablesCount", async () => {
+    await expect(
+      processSendEmailRequest({
+        to: "test@example.com",
+        template: "deal-confirmation",
+        templateData: {
+          sponsorName: "Sponsor",
+          dealTitle: "Deal",
+          dealAmount: "$1000",
+          startDate: "Jan",
+          endDate: "Mar",
+          deliverablesCount: -1,
+          creatorName: "Creator",
+          creatorShow: "Show",
+        },
+      })
+    ).rejects.toThrow();
+  });
+
+  it("rejects negative daysOverdue", async () => {
+    await expect(
+      processSendEmailRequest({
+        to: "test@example.com",
+        template: "payment-followup",
+        templateData: {
+          sponsorName: "Sponsor",
+          dealTitle: "Deal",
+          amount: "$500",
+          dueDate: "Feb 1",
+          daysOverdue: -1,
+          creatorName: "Creator",
+          creatorShow: "Show",
+        },
+      })
+    ).rejects.toThrow();
+  });
+
+  it("rejects followupNumber outside 1-3 range", async () => {
+    await expect(
+      processSendEmailRequest({
+        to: "test@example.com",
+        template: "payment-followup",
+        templateData: {
+          sponsorName: "Sponsor",
+          dealTitle: "Deal",
+          amount: "$500",
+          dueDate: "Feb 1",
+          daysOverdue: 5,
+          creatorName: "Creator",
+          creatorShow: "Show",
+          followupNumber: 0,
+        },
+      })
+    ).rejects.toThrow();
+
+    await expect(
+      processSendEmailRequest({
+        to: "test@example.com",
+        template: "payment-followup",
+        templateData: {
+          sponsorName: "Sponsor",
+          dealTitle: "Deal",
+          amount: "$500",
+          dueDate: "Feb 1",
+          daysOverdue: 5,
+          creatorName: "Creator",
+          creatorShow: "Show",
+          followupNumber: 4,
+        },
+      })
+    ).rejects.toThrow();
+  });
+});
+
+describe("validateTemplateData edge cases", () => {
+  it("rejects null data", () => {
+    const result = validateTemplateData("sponsor-outreach", null as any);
+    expect(result.success).toBe(false);
+  });
+
+  it("rejects undefined data", () => {
+    const result = validateTemplateData("sponsor-outreach", undefined as any);
+    expect(result.success).toBe(false);
+  });
+
+  it("applies default isOverdue=false for deliverable-reminder", () => {
+    const result = validateTemplateData("deliverable-reminder", {
+      sponsorName: "Sponsor",
+      dealTitle: "Deal",
+      deliverableTitle: "Deliverable",
+      dueDate: "Mar 15",
+      daysRemaining: 5,
+      creatorName: "Creator",
+      creatorShow: "Show",
+    });
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.isOverdue).toBe(false);
+    }
+  });
+
+  it("accepts explicit isOverdue=true for deliverable-reminder", () => {
+    const result = validateTemplateData("deliverable-reminder", {
+      sponsorName: "Sponsor",
+      dealTitle: "Deal",
+      deliverableTitle: "Deliverable",
+      dueDate: "Mar 1",
+      daysRemaining: -3,
+      isOverdue: true,
+      creatorName: "Creator",
+      creatorShow: "Show",
+    });
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.isOverdue).toBe(true);
+    }
+  });
+
+  it("applies default currency=USD for deal-confirmation when omitted", () => {
+    const result = validateTemplateData("deal-confirmation", {
+      sponsorName: "Sponsor",
+      dealTitle: "Deal",
+      dealAmount: "$1000",
+      startDate: "Jan",
+      endDate: "Mar",
+      deliverablesCount: 1,
+      creatorName: "Creator",
+      creatorShow: "Show",
+    });
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.currency).toBe("USD");
+    }
+  });
+
+  it("accepts 3-letter currency code", () => {
+    const result = validateTemplateData("deal-confirmation", {
+      sponsorName: "Sponsor",
+      dealTitle: "Deal",
+      dealAmount: "€1000",
+      currency: "EUR",
+      startDate: "Jan",
+      endDate: "Mar",
+      deliverablesCount: 1,
+      creatorName: "Creator",
+      creatorShow: "Show",
+    });
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.currency).toBe("EUR");
+    }
+  });
+
+  it("rejects currency codes that are not 3 letters", () => {
+    const result = validateTemplateData("deal-confirmation", {
+      sponsorName: "Sponsor",
+      dealTitle: "Deal",
+      dealAmount: "$1000",
+      currency: "US",
+      startDate: "Jan",
+      endDate: "Mar",
+      deliverablesCount: 1,
+      creatorName: "Creator",
+      creatorShow: "Show",
+    } as any);
+    expect(result.success).toBe(false);
+  });
+
+  it("applies defaults for payment-followup (currency, daysOverdue, followupNumber)", () => {
+    const result = validateTemplateData("payment-followup", {
+      sponsorName: "Sponsor",
+      dealTitle: "Deal",
+      amount: "$500",
+      dueDate: "Feb 1",
+      creatorName: "Creator",
+      creatorShow: "Show",
+    });
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.currency).toBe("USD");
+      expect(result.data.daysOverdue).toBe(0);
+      expect(result.data.followupNumber).toBe(1);
+    }
+  });
+
+  it("accepts optional dashboardUrl for deliverable-reminder", () => {
+    const result = validateTemplateData("deliverable-reminder", {
+      sponsorName: "Sponsor",
+      dealTitle: "Deal",
+      deliverableTitle: "Deliverable",
+      dueDate: "Mar 15",
+      daysRemaining: 5,
+      creatorName: "Creator",
+      creatorShow: "Show",
+      dashboardUrl: "https://app.example.com/dashboard",
+    });
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.dashboardUrl).toBe("https://app.example.com/dashboard");
+    }
+  });
+
+  it("accepts optional dealAmount and proposalUrl for sponsor-outreach", () => {
+    const result = validateTemplateData("sponsor-outreach", {
+      sponsorName: "Sponsor",
+      creatorName: "Creator",
+      creatorShow: "Show",
+      proposalSummary: "Summary",
+      dealAmount: "$5,000",
+      proposalUrl: "https://app.example.com/proposal/1",
+    });
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.dealAmount).toBe("$5,000");
+      expect(result.data.proposalUrl).toBe("https://app.example.com/proposal/1");
+    }
+  });
+});
+
+describe("getTemplateSubject edge cases", () => {
+  it("generates payment reminder for followupNumber 1", () => {
+    const subject = getTemplateSubject("payment-followup", {
+      sponsorName: "Sponsor",
+      dealTitle: "Deal",
+      amount: "$500",
+      currency: "USD",
+      dueDate: "Feb 1",
+      daysOverdue: 5,
+      creatorName: "Creator",
+      creatorShow: "Show",
+      followupNumber: 1,
+    });
+    expect(subject).toContain("Payment Reminder");
+    expect(subject).toContain("$500");
+    expect(subject).toContain("Deal");
+  });
+
+  it("generates payment follow-up for followupNumber 2", () => {
+    const subject = getTemplateSubject("payment-followup", {
+      sponsorName: "Sponsor",
+      dealTitle: "Deal",
+      amount: "$750",
+      currency: "USD",
+      dueDate: "Feb 1",
+      daysOverdue: 10,
+      creatorName: "Creator",
+      creatorShow: "Show",
+      followupNumber: 2,
+    });
+    expect(subject).toContain("Payment Follow-Up");
+    expect(subject).toContain("$750");
+  });
+
+  it("generates final notice for followupNumber 3", () => {
+    const subject = getTemplateSubject("payment-followup", {
+      sponsorName: "Sponsor",
+      dealTitle: "Deal",
+      amount: "$1000",
+      currency: "USD",
+      dueDate: "Feb 1",
+      daysOverdue: 30,
+      creatorName: "Creator",
+      creatorShow: "Show",
+      followupNumber: 3,
+    });
+    expect(subject).toContain("Final Payment Notice");
+    expect(subject).toContain("$1000");
+  });
+});

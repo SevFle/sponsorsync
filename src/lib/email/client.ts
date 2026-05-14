@@ -10,7 +10,24 @@ import {
 import type { EmailTemplateSlug, TemplateDataMap, SendEmailInput } from "@/emails/types";
 import { sendEmailSchema } from "@/emails/types";
 
-const resend = new Resend(config.email.resendApiKey);
+let _resend: Resend | undefined;
+
+function getResend(): Resend {
+  if (!_resend) {
+    const apiKey = config.email.resendApiKey;
+    if (!apiKey) {
+      throw new Error(
+        "RESEND_API_KEY is not configured. Set the RESEND_API_KEY environment variable to send emails."
+      );
+    }
+    _resend = new Resend(apiKey);
+  }
+  return _resend;
+}
+
+export function _resetResendClient(): void {
+  _resend = undefined;
+}
 
 const DEFAULT_FROM = "SponsorSync <notifications@sponsorsync.app>";
 
@@ -19,6 +36,7 @@ export interface SendEmailResult {
 }
 
 export async function sendEmail(payload: EmailPayload): Promise<SendEmailResult> {
+  const client = getResend();
   const html = await render(payload.react);
   const text = await render(payload.react, { plainText: true });
 
@@ -35,7 +53,7 @@ export async function sendEmail(payload: EmailPayload): Promise<SendEmailResult>
   if (payload.replyTo) params.replyTo = payload.replyTo;
   if (payload.scheduledAt) params.scheduledAt = payload.scheduledAt;
 
-  const { data, error } = await resend.emails.send(params as unknown as Parameters<typeof resend.emails.send>[0]);
+  const { data, error } = await client.emails.send(params as unknown as Parameters<typeof client.emails.send>[0]);
 
   if (error) {
     throw new Error(`Email delivery failed: ${error.message}`);
@@ -90,4 +108,4 @@ export async function processSendEmailRequest(input: SendEmailInput): Promise<Se
   );
 }
 
-export { resend };
+export { getResend };

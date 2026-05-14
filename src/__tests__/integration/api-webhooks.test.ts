@@ -34,6 +34,7 @@ vi.mock("@/lib/inngest/client", () => ({
   deadlineReminderFunction: {},
   deliverableVerificationFunction: {},
   paymentFollowUpFunction: {},
+  statusTransitionFunction: {},
 }));
 
 import { POST as StripeWebhook } from "@/app/api/webhooks/stripe/route";

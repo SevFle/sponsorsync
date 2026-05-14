@@ -100,7 +100,7 @@ export function getTieredDeadlineAlerts(
       continue;
     }
 
-    for (const tier of schedule) {
+    for (const tier of [...schedule].sort((a, b) => a - b)) {
       const matchesTier = daysRemaining > 0 && daysRemaining <= tier;
       if (matchesTier) {
         alerts.push({
