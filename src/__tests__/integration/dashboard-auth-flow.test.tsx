@@ -2,13 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, screen, waitFor, fireEvent } from "@testing-library/react";
 
 vi.mock("@/lib/auth/guard", () => ({
-  getAuthenticatedSession: vi.fn(),
-}));
-
-vi.mock("next/navigation", () => ({
-  redirect: vi.fn(() => {
-    throw new Error("NEXT_REDIRECT");
-  }),
+  requireAuth: vi.fn(),
 }));
 
 vi.mock("@/lib/db/queries/deals", () => ({
@@ -23,8 +17,7 @@ vi.mock("@/lib/db/queries/payments", () => ({
   getPaymentsByUserId: vi.fn(),
 }));
 
-import { getAuthenticatedSession } from "@/lib/auth/guard";
-import { redirect } from "next/navigation";
+import { requireAuth } from "@/lib/auth/guard";
 import { getDealsByUserId } from "@/lib/db/queries/deals";
 import { getDeliverablesByUserId } from "@/lib/db/queries/deliverables";
 import { getPaymentsByUserId } from "@/lib/db/queries/payments";
@@ -32,7 +25,13 @@ import { getPaymentsByUserId } from "@/lib/db/queries/payments";
 const mockSession = { user: { id: "user-1", email: "test@test.com", name: "Test User" } };
 
 function setAuth(session: typeof mockSession | null) {
-  (getAuthenticatedSession as ReturnType<typeof vi.fn>).mockResolvedValue(session);
+  if (session) {
+    (requireAuth as ReturnType<typeof vi.fn>).mockResolvedValue(session);
+  } else {
+    (requireAuth as ReturnType<typeof vi.fn>).mockImplementation(() => {
+      throw new Error("NEXT_REDIRECT");
+    });
+  }
 }
 
 function mockDbQueries(deals: any[] = [], deliverables: any[] = [], payments: any[] = []) {
@@ -61,7 +60,7 @@ describe("Dashboard auth flow - server-side redirect", () => {
     const { default: DashboardPage } = await import("@/app/(dashboard)/page");
 
     await expect(DashboardPage()).rejects.toThrow("NEXT_REDIRECT");
-    expect(redirect).toHaveBeenCalledWith("/login");
+    expect(requireAuth).toHaveBeenCalled();
   });
 
   it("does not query database when unauthenticated", async () => {
@@ -80,7 +79,6 @@ describe("Dashboard auth flow - server-side redirect", () => {
     const { default: DashboardPage } = await import("@/app/(dashboard)/page");
 
     const result = await DashboardPage();
-    expect(redirect).not.toHaveBeenCalled();
     expect(result).toBeDefined();
   });
 });
@@ -158,12 +156,12 @@ describe("Dashboard auth flow - error propagation", () => {
 });
 
 describe("Dashboard auth flow - session validation", () => {
-  it("redirects when getAuthenticatedSession returns null for falsy user id", async () => {
+  it("redirects when requireAuth throws for unauthenticated user", async () => {
     setAuth(null);
     const { default: DashboardPage } = await import("@/app/(dashboard)/page");
 
     await expect(DashboardPage()).rejects.toThrow("NEXT_REDIRECT");
-    expect(redirect).toHaveBeenCalledWith("/login");
+    expect(requireAuth).toHaveBeenCalled();
     expect(getDealsByUserId).not.toHaveBeenCalled();
   });
 
@@ -174,7 +172,6 @@ describe("Dashboard auth flow - session validation", () => {
 
     await DashboardPage();
     expect(getDealsByUserId).toHaveBeenCalledWith("valid-id");
-    expect(redirect).not.toHaveBeenCalled();
   });
 
   it("handles session with only user id", async () => {

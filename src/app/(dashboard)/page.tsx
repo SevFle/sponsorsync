@@ -1,5 +1,4 @@
-import { getAuthenticatedSession } from "@/lib/auth/guard";
-import { redirect } from "next/navigation";
+import { requireAuth } from "@/lib/auth/guard";
 import { formatDistanceToNow, isFuture } from "date-fns";
 import { PageHeader } from "@/components/ui/page-header";
 import { StatusBadge } from "@/components/ui/status-badge";
@@ -31,10 +30,7 @@ function getRecentActivity(payments: DashboardPayment[]) {
 }
 
 export default async function DashboardPage() {
-  const session = await getAuthenticatedSession();
-  if (!session) {
-    redirect("/login");
-  }
+  const session = await requireAuth();
 
   const userId = session.user.id;
 

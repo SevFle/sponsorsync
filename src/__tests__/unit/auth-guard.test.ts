@@ -8,8 +8,15 @@ vi.mock("@/lib/auth/config", () => ({
   authOptions: {},
 }));
 
+vi.mock("next/navigation", () => ({
+  redirect: vi.fn(() => {
+    throw new Error("NEXT_REDIRECT");
+  }),
+}));
+
 import { getServerSession } from "next-auth";
-import { getServerSessionOrNull, getAuthenticatedSession } from "@/lib/auth/guard";
+import { redirect } from "next/navigation";
+import { getServerSessionOrNull, getAuthenticatedSession, requireAuth } from "@/lib/auth/guard";
 
 const mockSession = { user: { id: "user-1", email: "test@test.com", name: "Test User" } };
 
@@ -109,5 +116,71 @@ describe("getAuthenticatedSession", () => {
 
     const result = await getAuthenticatedSession();
     expect(result).toEqual({ user: { id: "  " } });
+  });
+});
+
+describe("requireAuth", () => {
+  it("returns session when user is authenticated", async () => {
+    (getServerSession as ReturnType<typeof vi.fn>).mockResolvedValue(mockSession);
+
+    const result = await requireAuth();
+    expect(result).toEqual(mockSession);
+  });
+
+  it("redirects to /login when session is null", async () => {
+    (getServerSession as ReturnType<typeof vi.fn>).mockResolvedValue(null);
+
+    await expect(requireAuth()).rejects.toThrow("NEXT_REDIRECT");
+    expect(redirect).toHaveBeenCalledWith("/login");
+  });
+
+  it("redirects to /login when session has no user", async () => {
+    (getServerSession as ReturnType<typeof vi.fn>).mockResolvedValue({} as any);
+
+    await expect(requireAuth()).rejects.toThrow("NEXT_REDIRECT");
+    expect(redirect).toHaveBeenCalledWith("/login");
+  });
+
+  it("redirects to /login when session user has no id", async () => {
+    (getServerSession as ReturnType<typeof vi.fn>).mockResolvedValue({ user: {} } as any);
+
+    await expect(requireAuth()).rejects.toThrow("NEXT_REDIRECT");
+    expect(redirect).toHaveBeenCalledWith("/login");
+  });
+
+  it("redirects to /login when session user has empty string id", async () => {
+    (getServerSession as ReturnType<typeof vi.fn>).mockResolvedValue({ user: { id: "" } } as any);
+
+    await expect(requireAuth()).rejects.toThrow("NEXT_REDIRECT");
+    expect(redirect).toHaveBeenCalledWith("/login");
+  });
+
+  it("returns session with whitespace id (truthy)", async () => {
+    (getServerSession as ReturnType<typeof vi.fn>).mockResolvedValue({ user: { id: "  " } });
+
+    const result = await requireAuth();
+    expect(result).toEqual({ user: { id: "  " } });
+  });
+
+  it("calls getServerSession with authOptions", async () => {
+    (getServerSession as ReturnType<typeof vi.fn>).mockResolvedValue(mockSession);
+
+    await requireAuth();
+    expect(getServerSession).toHaveBeenCalledWith({});
+  });
+
+  it("does not redirect when session is valid", async () => {
+    (getServerSession as ReturnType<typeof vi.fn>).mockResolvedValue(mockSession);
+
+    await requireAuth();
+    expect(redirect).not.toHaveBeenCalled();
+  });
+
+  it("propagates getServerSession errors", async () => {
+    (getServerSession as ReturnType<typeof vi.fn>).mockRejectedValue(
+      new Error("Session lookup failed")
+    );
+
+    await expect(requireAuth()).rejects.toThrow("Session lookup failed");
   });
 });

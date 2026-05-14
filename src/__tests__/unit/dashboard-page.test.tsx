@@ -2,13 +2,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, waitFor } from "@testing-library/react";
 
 vi.mock("@/lib/auth/guard", () => ({
-  getAuthenticatedSession: vi.fn(),
-}));
-
-vi.mock("next/navigation", () => ({
-  redirect: vi.fn(() => {
-    throw new Error("NEXT_REDIRECT");
-  }),
+  requireAuth: vi.fn(),
 }));
 
 vi.mock("@/lib/db/queries/deals", () => ({
@@ -23,8 +17,7 @@ vi.mock("@/lib/db/queries/payments", () => ({
   getPaymentsByUserId: vi.fn(),
 }));
 
-import { getAuthenticatedSession } from "@/lib/auth/guard";
-import { redirect } from "next/navigation";
+import { requireAuth } from "@/lib/auth/guard";
 import { getDealsByUserId } from "@/lib/db/queries/deals";
 import { getDeliverablesByUserId } from "@/lib/db/queries/deliverables";
 import { getPaymentsByUserId } from "@/lib/db/queries/payments";
@@ -32,7 +25,13 @@ import { getPaymentsByUserId } from "@/lib/db/queries/payments";
 const mockSession = { user: { id: "user-1", email: "test@test.com", name: "Test User" } };
 
 function mockAuth(session: typeof mockSession | null) {
-  (getAuthenticatedSession as ReturnType<typeof vi.fn>).mockResolvedValue(session);
+  if (session) {
+    (requireAuth as ReturnType<typeof vi.fn>).mockResolvedValue(session);
+  } else {
+    (requireAuth as ReturnType<typeof vi.fn>).mockImplementation(() => {
+      throw new Error("NEXT_REDIRECT");
+    });
+  }
 }
 
 const futureDate = (daysFromNow: number) => {
@@ -169,7 +168,7 @@ describe("DashboardPage - server-side auth guard", () => {
     const { default: DashboardPage } = await import("@/app/(dashboard)/page");
 
     await expect(DashboardPage()).rejects.toThrow("NEXT_REDIRECT");
-    expect(redirect).toHaveBeenCalledWith("/login");
+    expect(requireAuth).toHaveBeenCalled();
   });
 
   it("does not redirect when authenticated", async () => {
@@ -178,7 +177,6 @@ describe("DashboardPage - server-side auth guard", () => {
     const { default: DashboardPage } = await import("@/app/(dashboard)/page");
 
     const result = await DashboardPage();
-    expect(redirect).not.toHaveBeenCalled();
     expect(result).toBeDefined();
   });
 
@@ -626,12 +624,12 @@ describe("DashboardPage - session edge cases", () => {
     expect(getDealsByUserId).toHaveBeenCalledWith("u");
   });
 
-  it("calls getAuthenticatedSession exactly once per render", async () => {
+  it("calls requireAuth exactly once per render", async () => {
     mockDbQueries();
     const { default: DashboardPage } = await import("@/app/(dashboard)/page");
 
     await DashboardPage();
 
-    expect(getAuthenticatedSession).toHaveBeenCalledTimes(1);
+    expect(requireAuth).toHaveBeenCalledTimes(1);
   });
 });
