@@ -3,7 +3,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth/config";
 import { getTemplateById } from "@/lib/db/queries/templates";
 import { sendTemplateEmail, checkRateLimit } from "@/lib/email/emailService";
-import { interpolateTemplate, validateVariables, extractVariablesFromTemplate } from "@/lib/templates/templateEngine";
+import { extractVariablesFromTemplate } from "@/lib/templates/templateEngine";
 import { resolveVariables, type VariableContext } from "@/lib/templates/variableResolver";
 
 export async function POST(
@@ -43,8 +43,25 @@ export async function POST(
       return NextResponse.json({ error: "Template not found" }, { status: 404 });
     }
 
+    let resolvedVars: Record<string, string> = {};
+
+    const sponsorId = typeof data.sponsorId === "string" ? data.sponsorId : undefined;
+    const dealId = typeof data.dealId === "string" ? data.dealId : undefined;
+    const deliverableId = typeof data.deliverableId === "string" ? data.deliverableId : undefined;
+
+    if (sponsorId || dealId || deliverableId) {
+      const context: VariableContext = {
+        userId: session.user.id,
+        sponsorId,
+        dealId,
+        deliverableId,
+      };
+      const dbVars = await resolveVariables(context);
+      resolvedVars = { ...dbVars.variables };
+    }
+
     const userOverrides = (data.variables as Record<string, string>) ?? {};
-    const resolvedVars = userOverrides;
+    resolvedVars = { ...resolvedVars, ...userOverrides };
 
     const requiredVars = extractVariablesFromTemplate(template.subject, template.body);
     const missing = requiredVars.filter((v) => !resolvedVars[v]);
