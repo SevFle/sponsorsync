@@ -405,6 +405,264 @@ test.describe("Notification Preferences - Authenticated", () => {
     const body = await response.json();
     expect(body.preferences.reminderDaysBefore).toBe(7);
   });
+
+  test("PUT can disable deliverable updates", async ({ page }) => {
+    const updatedPrefs = { ...MOCK_PREFERENCES, deliverableUpdates: false };
+    await page.route("**/api/settings/notifications", (route) => {
+      if (route.request().method() === "PUT") {
+        route.fulfill({
+          status: 200,
+          body: JSON.stringify({ preferences: updatedPrefs }),
+        });
+      } else {
+        route.continue();
+      }
+    });
+
+    const response = await page.request.put("/api/settings/notifications", {
+      data: { deliverableUpdates: false },
+    });
+    expect(response.status()).toBe(200);
+    const body = await response.json();
+    expect(body.preferences.deliverableUpdates).toBe(false);
+  });
+
+  test("PUT can update multiple preferences at once", async ({ page }) => {
+    const updatedPrefs = {
+      ...MOCK_PREFERENCES,
+      deadlineReminders: false,
+      paymentReminders: false,
+      reminderDaysBefore: 14,
+    };
+    await page.route("**/api/settings/notifications", (route) => {
+      if (route.request().method() === "PUT") {
+        route.fulfill({
+          status: 200,
+          body: JSON.stringify({ preferences: updatedPrefs }),
+        });
+      } else {
+        route.continue();
+      }
+    });
+
+    const response = await page.request.put("/api/settings/notifications", {
+      data: {
+        deadlineReminders: false,
+        paymentReminders: false,
+        reminderDaysBefore: 14,
+      },
+    });
+    expect(response.status()).toBe(200);
+    const body = await response.json();
+    expect(body.preferences.deadlineReminders).toBe(false);
+    expect(body.preferences.paymentReminders).toBe(false);
+    expect(body.preferences.reminderDaysBefore).toBe(14);
+  });
+});
+
+test.describe("Notification Preferences - Reminder Schedule", () => {
+  test.beforeEach(async ({ page }) => {
+    await signIn(page);
+  });
+
+  test("PUT can set reminderSchedule array", async ({ page }) => {
+    const updatedPrefs = {
+      ...MOCK_PREFERENCES,
+      reminderSchedule: [7, 3, 1],
+    };
+    await page.route("**/api/settings/notifications", (route) => {
+      if (route.request().method() === "PUT") {
+        route.fulfill({
+          status: 200,
+          body: JSON.stringify({ preferences: updatedPrefs }),
+        });
+      } else {
+        route.continue();
+      }
+    });
+
+    const response = await page.request.put("/api/settings/notifications", {
+      data: { reminderSchedule: [7, 3, 1] },
+    });
+    expect(response.status()).toBe(200);
+    const body = await response.json();
+    expect(body.preferences.reminderSchedule).toEqual([7, 3, 1]);
+  });
+
+  test("PUT accepts single-tier reminder schedule", async ({ page }) => {
+    const updatedPrefs = {
+      ...MOCK_PREFERENCES,
+      reminderSchedule: [3],
+    };
+    await page.route("**/api/settings/notifications", (route) => {
+      if (route.request().method() === "PUT") {
+        route.fulfill({
+          status: 200,
+          body: JSON.stringify({ preferences: updatedPrefs }),
+        });
+      } else {
+        route.continue();
+      }
+    });
+
+    const response = await page.request.put("/api/settings/notifications", {
+      data: { reminderSchedule: [3] },
+    });
+    expect(response.status()).toBe(200);
+    const body = await response.json();
+    expect(body.preferences.reminderSchedule).toEqual([3]);
+  });
+
+  test("PUT accepts five-tier reminder schedule (max)", async ({ page }) => {
+    const updatedPrefs = {
+      ...MOCK_PREFERENCES,
+      reminderSchedule: [14, 7, 5, 3, 1],
+    };
+    await page.route("**/api/settings/notifications", (route) => {
+      if (route.request().method() === "PUT") {
+        route.fulfill({
+          status: 200,
+          body: JSON.stringify({ preferences: updatedPrefs }),
+        });
+      } else {
+        route.continue();
+      }
+    });
+
+    const response = await page.request.put("/api/settings/notifications", {
+      data: { reminderSchedule: [14, 7, 5, 3, 1] },
+    });
+    expect(response.status()).toBe(200);
+    const body = await response.json();
+    expect(body.preferences.reminderSchedule).toHaveLength(5);
+  });
+
+  test("PUT returns 400 for empty reminderSchedule", async ({ page }) => {
+    await page.route("**/api/settings/notifications", (route) => {
+      if (route.request().method() === "PUT") {
+        route.fulfill({
+          status: 400,
+          body: JSON.stringify({
+            error: "Validation failed",
+            details: ["reminderSchedule: Schedule cannot be empty"],
+          }),
+        });
+      } else {
+        route.continue();
+      }
+    });
+
+    const response = await page.request.put("/api/settings/notifications", {
+      data: { reminderSchedule: [] },
+    });
+    expect(response.status()).toBe(400);
+    const body = await response.json();
+    expect(body.error).toContain("Validation failed");
+  });
+
+  test("PUT returns 400 for reminderSchedule exceeding 5 tiers", async ({ page }) => {
+    await page.route("**/api/settings/notifications", (route) => {
+      if (route.request().method() === "PUT") {
+        route.fulfill({
+          status: 400,
+          body: JSON.stringify({
+            error: "Schedule cannot have more than 5 tiers",
+          }),
+        });
+      } else {
+        route.continue();
+      }
+    });
+
+    const response = await page.request.put("/api/settings/notifications", {
+      data: { reminderSchedule: [30, 21, 14, 7, 3, 1] },
+    });
+    expect(response.status()).toBe(400);
+    const body = await response.json();
+    expect(body.error).toContain("5 tiers");
+  });
+
+  test("PUT returns 400 for reminderSchedule with value below 1", async ({ page }) => {
+    await page.route("**/api/settings/notifications", (route) => {
+      if (route.request().method() === "PUT") {
+        route.fulfill({
+          status: 400,
+          body: JSON.stringify({
+            error: "Each tier must be between 1 and 30 days",
+          }),
+        });
+      } else {
+        route.continue();
+      }
+    });
+
+    const response = await page.request.put("/api/settings/notifications", {
+      data: { reminderSchedule: [7, 0] },
+    });
+    expect(response.status()).toBe(400);
+  });
+
+  test("PUT returns 400 for reminderSchedule with value above 30", async ({ page }) => {
+    await page.route("**/api/settings/notifications", (route) => {
+      if (route.request().method() === "PUT") {
+        route.fulfill({
+          status: 400,
+          body: JSON.stringify({
+            error: "Each tier must be between 1 and 30 days",
+          }),
+        });
+      } else {
+        route.continue();
+      }
+    });
+
+    const response = await page.request.put("/api/settings/notifications", {
+      data: { reminderSchedule: [31] },
+    });
+    expect(response.status()).toBe(400);
+  });
+
+  test("PUT returns 400 for reminderDaysBefore below minimum", async ({ page }) => {
+    await page.route("**/api/settings/notifications", (route) => {
+      if (route.request().method() === "PUT") {
+        route.fulfill({
+          status: 400,
+          body: JSON.stringify({
+            error: "Validation failed",
+            details: ["reminderDaysBefore: Number must be greater than or equal to 1"],
+          }),
+        });
+      } else {
+        route.continue();
+      }
+    });
+
+    const response = await page.request.put("/api/settings/notifications", {
+      data: { reminderDaysBefore: 0 },
+    });
+    expect(response.status()).toBe(400);
+  });
+
+  test("PUT returns 400 for reminderDaysBefore above maximum", async ({ page }) => {
+    await page.route("**/api/settings/notifications", (route) => {
+      if (route.request().method() === "PUT") {
+        route.fulfill({
+          status: 400,
+          body: JSON.stringify({
+            error: "Validation failed",
+            details: ["reminderDaysBefore: Number must be less than or equal to 30"],
+          }),
+        });
+      } else {
+        route.continue();
+      }
+    });
+
+    const response = await page.request.put("/api/settings/notifications", {
+      data: { reminderDaysBefore: 31 },
+    });
+    expect(response.status()).toBe(400);
+  });
 });
 
 test.describe("Notification Types - Badge Data", () => {
@@ -644,5 +902,90 @@ test.describe("Mark-as-Read Behavior", () => {
     });
     const resp2 = await page.request.get("/api/notifications");
     expect((await resp2.json()).unreadCount).toBe(1);
+  });
+});
+
+test.describe("Notifications - Deadline Reminder Integration", () => {
+  test.beforeEach(async ({ page }) => {
+    await signIn(page);
+  });
+
+  test("deadline reminder notification includes related deal reference", async ({ page }) => {
+    await page.route("**/api/notifications", (route) =>
+      route.fulfill({
+        status: 200,
+        body: JSON.stringify({
+          notifications: MOCK_NOTIFICATIONS,
+          unreadCount: 3,
+        }),
+      })
+    );
+
+    const response = await page.request.get("/api/notifications");
+    const body = await response.json();
+    const deadlineNotif = body.notifications.find(
+      (n: any) => n.type === "deadline_reminder" && n.id === "notif-1"
+    );
+    expect(deadlineNotif.relatedId).toBe("deal-1");
+    expect(deadlineNotif.message).toContain("due in 3 days");
+  });
+
+  test("deadline today notification has correct urgency text", async ({ page }) => {
+    await page.route("**/api/notifications", (route) =>
+      route.fulfill({
+        status: 200,
+        body: JSON.stringify({
+          notifications: MOCK_NOTIFICATIONS,
+          unreadCount: 3,
+        }),
+      })
+    );
+
+    const response = await page.request.get("/api/notifications");
+    const body = await response.json();
+    const todayNotif = body.notifications.find(
+      (n: any) => n.id === "notif-4"
+    );
+    expect(todayNotif.title).toBe("Deadline Today");
+    expect(todayNotif.message).toContain("due today");
+  });
+
+  test("overdue deliverable notification has days overdue info", async ({ page }) => {
+    await page.route("**/api/notifications", (route) =>
+      route.fulfill({
+        status: 200,
+        body: JSON.stringify({
+          notifications: MOCK_NOTIFICATIONS,
+          unreadCount: 3,
+        }),
+      })
+    );
+
+    const response = await page.request.get("/api/notifications");
+    const body = await response.json();
+    const overdueNotif = body.notifications.find(
+      (n: any) => n.type === "overdue_deliverable"
+    );
+    expect(overdueNotif.message).toMatch(/\d+ days?/);
+    expect(overdueNotif.message).toMatch(/overdue/i);
+  });
+
+  test("notifications are ordered by creation date (newest first)", async ({ page }) => {
+    await page.route("**/api/notifications", (route) =>
+      route.fulfill({
+        status: 200,
+        body: JSON.stringify({
+          notifications: MOCK_NOTIFICATIONS,
+          unreadCount: 3,
+        }),
+      })
+    );
+
+    const response = await page.request.get("/api/notifications");
+    const body = await response.json();
+    const dates = body.notifications.map((n: any) => new Date(n.createdAt).getTime());
+    for (let i = 1; i < dates.length; i++) {
+      expect(dates[i - 1]).toBeGreaterThanOrEqual(dates[i]);
+    }
   });
 });

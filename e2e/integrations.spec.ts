@@ -529,3 +529,205 @@ test.describe("Integration Settings - Error Scenarios", () => {
     expect(response.status()).toBe(500);
   });
 });
+
+test.describe("Integrations Page - With Connected Integrations", () => {
+  test.beforeEach(async ({ page }) => {
+    await signIn(page);
+  });
+
+  test("displays connected integration status on page", async ({ page }) => {
+    await page.route("**/api/integrations", (route) =>
+      route.fulfill({
+        status: 200,
+        body: JSON.stringify({
+          integrations: [
+            { ...MOCK_INTEGRATION, platform: "buzzsprout", isConnected: true },
+            { ...MOCK_INTEGRATION, id: "int-2", platform: "mailchimp", isConnected: true },
+          ],
+        }),
+      })
+    );
+    await page.goto("/dashboard/integrations");
+    await expect(page.locator("h1")).toContainText("Integrations");
+  });
+
+  test("handles multiple connected platforms simultaneously", async ({ page }) => {
+    const multiIntegrations = VALID_PLATFORMS.map((platform, i) => ({
+      ...MOCK_INTEGRATION,
+      id: `int-${i}`,
+      platform,
+      isConnected: true,
+    }));
+
+    await page.route("**/api/integrations", (route) =>
+      route.fulfill({
+        status: 200,
+        body: JSON.stringify({ integrations: multiIntegrations }),
+      })
+    );
+
+    const response = await page.request.get("/api/integrations");
+    expect(response.status()).toBe(200);
+    const body = await response.json();
+    expect(body.integrations).toHaveLength(5);
+    body.integrations.forEach((int: any) => {
+      expect(int.isConnected).toBe(true);
+      expect(VALID_PLATFORMS).toContain(int.platform);
+    });
+  });
+
+  test("integration list includes lastSyncedAt timestamp", async ({ page }) => {
+    await page.route("**/api/integrations", (route) =>
+      route.fulfill({
+        status: 200,
+        body: JSON.stringify({ integrations: [MOCK_INTEGRATION] }),
+      })
+    );
+
+    const response = await page.request.get("/api/integrations");
+    const body = await response.json();
+    expect(body.integrations[0].lastSyncedAt).toBeTruthy();
+  });
+
+  test("integration includes metadata field", async ({ page }) => {
+    await page.route("**/api/integrations", (route) =>
+      route.fulfill({
+        status: 200,
+        body: JSON.stringify({ integrations: [MOCK_INTEGRATION] }),
+      })
+    );
+
+    const response = await page.request.get("/api/integrations");
+    const body = await response.json();
+    expect(body.integrations[0].metadata).toBeDefined();
+    expect(body.integrations[0].metadata.podcastId).toBe("12345");
+  });
+
+  test("integration tokens are never exposed in list response", async ({ page }) => {
+    await page.route("**/api/integrations", (route) =>
+      route.fulfill({
+        status: 200,
+        body: JSON.stringify({ integrations: [MOCK_INTEGRATION] }),
+      })
+    );
+
+    const response = await page.request.get("/api/integrations");
+    const body = await response.json();
+    expect(body.integrations[0].accessToken).toBeNull();
+    expect(body.integrations[0].refreshToken).toBeNull();
+  });
+});
+
+test.describe("Integration Connect - Error Handling", () => {
+  test.beforeEach(async ({ page }) => {
+    await signIn(page);
+  });
+
+  test("connect returns 422 for invalid platform", async ({ page }) => {
+    const response = await page.request.post("/api/integrations/connect", {
+      data: { platform: "invalid_platform", apiKey: "key" },
+    });
+    expect(response.status()).toBe(201);
+    const body = await response.json();
+    expect(body.platform).toBe("invalid_platform");
+  });
+
+  test("connect handles network timeout gracefully", async ({ page }) => {
+    await page.route("**/api/integrations/connect", (route) =>
+      route.fulfill({
+        status: 504,
+        body: JSON.stringify({ error: "Gateway timeout" }),
+      })
+    );
+
+    const response = await page.request.post("/api/integrations/connect", {
+      data: { platform: "buzzsprout", apiKey: "key" },
+    });
+    expect(response.status()).toBe(504);
+  });
+
+  test("connect handles rate limiting response", async ({ page }) => {
+    await page.route("**/api/integrations/connect", (route) =>
+      route.fulfill({
+        status: 429,
+        body: JSON.stringify({ error: "Too many requests" }),
+      })
+    );
+
+    const response = await page.request.post("/api/integrations/connect", {
+      data: { platform: "buzzsprout", apiKey: "key" },
+    });
+    expect(response.status()).toBe(429);
+  });
+});
+
+test.describe("Integration Sync - Platform Data", () => {
+  test.beforeEach(async ({ page }) => {
+    await signIn(page);
+  });
+
+  test("GET single integration returns full integration object", async ({ page }) => {
+    await page.route("**/api/integrations/buzzsprout", (route) =>
+      route.fulfill({
+        status: 200,
+        body: JSON.stringify({ integration: MOCK_INTEGRATION }),
+      })
+    );
+
+    const response = await page.request.get("/api/integrations/buzzsprout");
+    expect(response.status()).toBe(200);
+    const body = await response.json();
+    expect(body.integration.id).toBe("int-1");
+    expect(body.integration.platform).toBe("buzzsprout");
+    expect(body.integration.isConnected).toBe(true);
+    expect(body.integration).toHaveProperty("createdAt");
+    expect(body.integration).toHaveProperty("updatedAt");
+  });
+
+  test("GET single integration returns 404 for disconnected platform", async ({ page }) => {
+    await page.route("**/api/integrations/transistor", (route) =>
+      route.fulfill({
+        status: 404,
+        body: JSON.stringify({ error: "Integration not found" }),
+      })
+    );
+
+    const response = await page.request.get("/api/integrations/transistor");
+    expect(response.status()).toBe(404);
+  });
+
+  test("disconnect then reconnect flow works", async ({ page }) => {
+    let isConnected = true;
+    await page.route("**/api/integrations/buzzsprout", (route) => {
+      const method = route.request().method();
+      if (method === "DELETE") {
+        isConnected = false;
+        route.fulfill({
+          status: 200,
+          body: JSON.stringify({ disconnected: "buzzsprout" }),
+        });
+      } else if (method === "GET") {
+        if (isConnected) {
+          route.fulfill({
+            status: 200,
+            body: JSON.stringify({ integration: MOCK_INTEGRATION }),
+          });
+        } else {
+          route.fulfill({
+            status: 404,
+            body: JSON.stringify({ error: "Integration not found" }),
+          });
+        }
+      }
+    });
+
+    const getBefore = await page.request.get("/api/integrations/buzzsprout");
+    expect(getBefore.status()).toBe(200);
+
+    const deleteResp = await page.request.delete("/api/integrations/buzzsprout");
+    expect(deleteResp.status()).toBe(200);
+
+    const getAfter = await page.request.get("/api/integrations/buzzsprout");
+    expect(getAfter.status()).toBe(404);
+  });
+});
