@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { useAuth } from "@/hooks/use-auth";
 import { apiFetch, ApiError } from "@/lib/api-client";
 
 interface NotificationPreferences {
@@ -14,6 +15,7 @@ interface NotificationPreferences {
 const DEFAULT_SCHEDULE = [7, 3, 1];
 
 export default function NotificationSettingsPage() {
+  const { isAuthenticated, isLoading: authLoading } = useAuth();
   const [prefs, setPrefs] = useState<NotificationPreferences | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -21,8 +23,9 @@ export default function NotificationSettingsPage() {
   const [scheduleInput, setScheduleInput] = useState("");
 
   useEffect(() => {
+    if (authLoading || !isAuthenticated) return;
     fetchPreferences();
-  }, []);
+  }, [authLoading, isAuthenticated]);
 
   async function fetchPreferences() {
     try {
@@ -69,6 +72,14 @@ export default function NotificationSettingsPage() {
     } finally {
       setSaving(false);
     }
+  }
+
+  if (authLoading || !isAuthenticated) {
+    return (
+      <div className="flex h-64 items-center justify-center">
+        <div className="h-8 w-8 animate-spin rounded-full border-4 border-gray-200 border-t-blue-600" />
+      </div>
+    );
   }
 
   if (loading) {

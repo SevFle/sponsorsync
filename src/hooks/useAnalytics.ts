@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import { apiFetch } from "@/lib/api-client";
 import type { DateRangePreset, RevenueSummary, PipelineSummary, DeliverableMetricsResult, TrendSummary } from "@/lib/analytics";
 
 interface AnalyticsData {
@@ -29,22 +30,11 @@ export function useAnalytics(range: DateRangePreset) {
     setState((prev) => ({ ...prev, isLoading: true, error: null }));
 
     try {
-      const [revenueRes, pipelineRes, deliverablesRes, trendsRes] = await Promise.all([
-        fetch(`/api/analytics/revenue?range=${range}`),
-        fetch("/api/analytics/pipeline"),
-        fetch(`/api/analytics/deliverables?range=${range}`),
-        fetch("/api/analytics/trends"),
-      ]);
-
-      if (!revenueRes.ok || !pipelineRes.ok || !deliverablesRes.ok || !trendsRes.ok) {
-        throw new Error("Failed to fetch analytics data");
-      }
-
       const [revenue, pipeline, deliverables, trends] = await Promise.all([
-        revenueRes.json(),
-        pipelineRes.json(),
-        deliverablesRes.json(),
-        trendsRes.json(),
+        apiFetch<RevenueSummary>(`/api/analytics/revenue?range=${range}`),
+        apiFetch<PipelineSummary>("/api/analytics/pipeline"),
+        apiFetch<DeliverableMetricsResult>(`/api/analytics/deliverables?range=${range}`),
+        apiFetch<TrendSummary>("/api/analytics/trends"),
       ]);
 
       setState({ revenue, pipeline, deliverables, trends, isLoading: false, error: null });

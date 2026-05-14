@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { PageHeader } from "@/components/ui/page-header";
@@ -20,6 +20,12 @@ export default function NewTemplatePage() {
   const router = useRouter();
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (sessionStatus === "unauthenticated") {
+      router.replace("/login");
+    }
+  }, [sessionStatus, router]);
 
   const handleSave = async (data: {
     name: string;
@@ -42,7 +48,13 @@ export default function NewTemplatePage() {
     }
   };
 
-  if (sessionStatus !== "authenticated") return null;
+  if (sessionStatus !== "authenticated") {
+    return (
+      <div className="flex h-64 items-center justify-center">
+        <div className="h-8 w-8 animate-spin rounded-full border-4 border-gray-200 border-t-blue-600" />
+      </div>
+    );
+  }
 
   return (
     <div>

@@ -46,6 +46,12 @@ export default function TemplateDetailPage() {
   }, [templateId]);
 
   useEffect(() => {
+    if (sessionStatus === "unauthenticated") {
+      router.replace("/login");
+    }
+  }, [sessionStatus, router]);
+
+  useEffect(() => {
     if (sessionStatus !== "authenticated") return;
     fetchTemplate();
   }, [fetchTemplate, sessionStatus]);
@@ -82,7 +88,13 @@ export default function TemplateDetailPage() {
     }
   };
 
-  if (sessionStatus !== "authenticated") return null;
+  if (sessionStatus !== "authenticated") {
+    return (
+      <div className="flex h-64 items-center justify-center">
+        <div className="h-8 w-8 animate-spin rounded-full border-4 border-gray-200 border-t-blue-600" />
+      </div>
+    );
+  }
 
   if (loading) {
     return (

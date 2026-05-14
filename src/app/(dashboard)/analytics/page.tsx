@@ -1,5 +1,6 @@
 "use client";
 
+import { useAuth } from "@/hooks/use-auth";
 import { useAnalytics } from "@/hooks/useAnalytics";
 import { useDateRange } from "@/hooks/useDateRange";
 import { DateRangePicker } from "@/components/dashboard/DateRangePicker";
@@ -11,8 +12,19 @@ import { MetricCardEnhanced } from "@/components/dashboard/MetricCardEnhanced";
 import { formatCurrency } from "@/lib/format";
 
 export default function AnalyticsPage() {
+  const { isAuthenticated, isLoading: authLoading } = useAuth();
   const { range, setRange } = useDateRange();
-  const { revenue, pipeline, deliverables, trends, isLoading, error } = useAnalytics(range);
+  const { revenue, pipeline, deliverables, trends, isLoading, error } = useAnalytics(
+    authLoading || !isAuthenticated ? "30d" : range
+  );
+
+  if (authLoading || !isAuthenticated) {
+    return (
+      <div className="flex h-64 items-center justify-center">
+        <div className="h-8 w-8 animate-spin rounded-full border-4 border-gray-200 border-t-blue-600" />
+      </div>
+    );
+  }
 
   if (error) {
     return (

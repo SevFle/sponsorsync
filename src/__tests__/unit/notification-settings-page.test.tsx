@@ -18,6 +18,15 @@ vi.mock("@/lib/api-client", () => ({
   ApiError: mockApiError,
 }));
 
+vi.mock("@/hooks/use-auth", () => ({
+  useAuth: vi.fn().mockReturnValue({
+    isAuthenticated: true,
+    isLoading: false,
+    status: "authenticated",
+    session: { user: { id: "user-1" } },
+  }),
+}));
+
 const defaultPrefs = {
   deadlineReminders: true,
   paymentReminders: false,
@@ -271,5 +280,44 @@ describe("NotificationSettingsPage - auth handling via apiFetch", () => {
     });
 
     expect(mockApiFetch).toHaveBeenCalledWith("/api/settings/notifications");
+  });
+});
+
+describe("NotificationSettingsPage - auth guard", () => {
+  it("shows spinner and does not fetch when unauthenticated", async () => {
+    const { useAuth } = await import("@/hooks/use-auth");
+    (useAuth as ReturnType<typeof vi.fn>).mockReturnValue({
+      isAuthenticated: false,
+      isLoading: false,
+      status: "unauthenticated",
+      session: null,
+    });
+
+    const { default: Page } = await import(
+      "@/app/(dashboard)/settings/notifications/page"
+    );
+
+    render(<Page />);
+
+    expect(mockApiFetch).not.toHaveBeenCalled();
+    expect(screen.queryByText("Notification Settings")).not.toBeInTheDocument();
+  });
+
+  it("shows spinner and does not fetch when auth is loading", async () => {
+    const { useAuth } = await import("@/hooks/use-auth");
+    (useAuth as ReturnType<typeof vi.fn>).mockReturnValue({
+      isAuthenticated: false,
+      isLoading: true,
+      status: "loading",
+      session: null,
+    });
+
+    const { default: Page } = await import(
+      "@/app/(dashboard)/settings/notifications/page"
+    );
+
+    render(<Page />);
+
+    expect(mockApiFetch).not.toHaveBeenCalled();
   });
 });
