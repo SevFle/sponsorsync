@@ -5,6 +5,7 @@ import { getTemplateById } from "@/lib/db/queries/templates";
 import { sendTemplateEmail, checkRateLimit } from "@/lib/email/emailService";
 import { extractVariablesFromTemplate } from "@/lib/templates/templateEngine";
 import { resolveVariables, type VariableContext } from "@/lib/templates/variableResolver";
+import { createCommunication } from "@/lib/db/queries/communications";
 
 export async function POST(
   request: Request,
@@ -81,6 +82,25 @@ export async function POST(
       replyTo: data.replyTo as string | string[] | undefined,
       variables: resolvedVars,
     });
+
+    const recipientList = Array.isArray(data.to) ? data.to : [data.to];
+
+    for (const recipient of recipientList) {
+      await createCommunication({
+        userId: session.user.id,
+        sponsorId: sponsorId ?? null,
+        sponsorContactId: typeof data.sponsorContactId === "string" ? data.sponsorContactId : null,
+        templateId: id,
+        dealId: dealId ?? null,
+        subject: template.subject ?? "",
+        body: template.body,
+        status: "sent",
+        providerId: result.id,
+        to: recipient,
+        cc: typeof data.cc === "string" ? data.cc : Array.isArray(data.cc) ? data.cc.join(",") : null,
+        bcc: typeof data.bcc === "string" ? data.bcc : Array.isArray(data.bcc) ? data.bcc.join(",") : null,
+      });
+    }
 
     return NextResponse.json({ id: result.id, rateLimit: { remaining: rateLimit.remaining } });
   } catch (error) {

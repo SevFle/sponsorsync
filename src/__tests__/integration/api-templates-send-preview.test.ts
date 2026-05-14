@@ -52,6 +52,11 @@ vi.mock("@/lib/templates/variableResolver", () => ({
   resolveVariables: (...args: unknown[]) => mockResolveVariables(...args),
 }));
 
+const mockCreateCommunication = vi.fn().mockResolvedValue({ id: "comm-1" });
+vi.mock("@/lib/db/queries/communications", () => ({
+  createCommunication: (...args: unknown[]) => mockCreateCommunication(...args),
+}));
+
 import { getServerSession } from "next-auth";
 import { getTemplateById } from "@/lib/db/queries/templates";
 

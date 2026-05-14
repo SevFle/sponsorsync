@@ -162,6 +162,38 @@ export const sessions = pgTable("sessions", {
   expires: timestamp("expires").notNull(),
 });
 
+export const sponsorContacts = pgTable("sponsor_contacts", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  sponsorId: uuid("sponsor_id").references(() => sponsors.id).notNull(),
+  name: text("name").notNull(),
+  email: text("email").notNull(),
+  role: varchar("role", { length: 100 }),
+  phone: text("phone"),
+  isPrimary: boolean("is_primary").default(false).notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const communicationStatusEnum = pgEnum("communication_status", ["sent", "delivered", "failed", "bounced"]);
+
+export const communications = pgTable("communications", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  userId: uuid("user_id").references(() => users.id).notNull(),
+  sponsorId: uuid("sponsor_id").references(() => sponsors.id),
+  sponsorContactId: uuid("sponsor_contact_id").references(() => sponsorContacts.id),
+  templateId: uuid("template_id").references(() => templates.id),
+  dealId: uuid("deal_id").references(() => deals.id),
+  subject: text("subject").notNull(),
+  body: text("body").notNull(),
+  status: communicationStatusEnum("status").default("sent").notNull(),
+  providerId: text("provider_id"),
+  to: text("to").notNull(),
+  cc: text("cc"),
+  bcc: text("bcc"),
+  sentAt: timestamp("sent_at").defaultNow().notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
 export const verificationLogs = pgTable("verification_logs", {
   id: uuid("id").primaryKey().defaultRandom(),
   deliverableId: uuid("deliverable_id").references(() => deliverables.id).notNull(),

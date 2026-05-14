@@ -161,6 +161,12 @@ export default function SponsorDetailPage({ params }: { params: Promise<{ id: st
         </div>
         <div className="flex gap-2">
           <a
+            href={`/dashboard/sponsors/${sponsor.id}/communications`}
+            className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700"
+          >
+            Communications
+          </a>
+          <a
             href={`/dashboard/sponsors/${sponsor.id}/edit`}
             className="rounded-md bg-gray-100 px-4 py-2 text-sm font-medium text-gray-900 transition-colors hover:bg-gray-200"
           >
