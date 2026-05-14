@@ -4,6 +4,7 @@ import {
   deadlineReminderFunction,
   deliverableVerificationFunction,
   paymentFollowUpFunction,
+  statusTransitionFunction,
 } from "@/lib/inngest/client";
 
 const handler = serve({
@@ -12,6 +13,7 @@ const handler = serve({
     deadlineReminderFunction,
     deliverableVerificationFunction,
     paymentFollowUpFunction,
+    statusTransitionFunction,
   ],
 } as unknown as Parameters<typeof serve>[0]);
 

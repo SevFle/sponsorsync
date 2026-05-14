@@ -115,6 +115,7 @@ export const notificationPreferences = pgTable("notification_preferences", {
   paymentReminders: boolean("payment_reminders").default(true).notNull(),
   deliverableUpdates: boolean("deliverable_updates").default(true).notNull(),
   reminderDaysBefore: integer("reminder_days_before").default(3).notNull(),
+  reminderSchedule: jsonb("reminder_schedule").$type<number[]>(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
@@ -132,6 +133,7 @@ export const notifications = pgTable("notifications", {
   title: text("title").notNull(),
   message: text("message").notNull(),
   relatedId: uuid("related_id"),
+  notificationKey: text("notification_key"),
   read: boolean("read").default(false).notNull(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });

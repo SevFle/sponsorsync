@@ -34,6 +34,7 @@ export async function upsertNotificationPreferences(
     paymentReminders?: boolean;
     deliverableUpdates?: boolean;
     reminderDaysBefore?: number;
+    reminderSchedule?: number[];
   }
 ) {
   const existing = await getNotificationPreferences(userId);

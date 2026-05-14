@@ -5,6 +5,15 @@ export default function SettingsPage() {
       <p className="mt-2 text-gray-500">Profile, billing, and notification preferences.</p>
       <div className="mt-6 space-y-4">
         <a
+          href="/dashboard/settings/notifications"
+          className="block rounded-lg border p-4 transition-shadow hover:shadow-md"
+        >
+          <h2 className="font-semibold">Notification Preferences</h2>
+          <p className="mt-1 text-sm text-gray-500">
+            Configure deadline reminders, payment notifications, and reminder schedule.
+          </p>
+        </a>
+        <a
           href="/dashboard/settings/billing"
           className="block rounded-lg border p-4 transition-shadow hover:shadow-md"
         >

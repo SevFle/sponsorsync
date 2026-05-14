@@ -8,6 +8,7 @@ export async function createNotification(data: {
   title: string;
   message: string;
   relatedId?: string;
+  notificationKey?: string;
 }) {
   const [notification] = await db
     .insert(notifications)
@@ -17,9 +18,28 @@ export async function createNotification(data: {
       title: data.title,
       message: data.message,
       relatedId: data.relatedId ?? null,
+      notificationKey: data.notificationKey ?? null,
     })
     .returning();
   return notification;
+}
+
+export async function notificationKeyExists(key: string): Promise<boolean> {
+  const results = await db
+    .select({ id: notifications.id })
+    .from(notifications)
+    .where(eq(notifications.notificationKey, key))
+    .limit(1);
+  return results.length > 0;
+}
+
+export async function findNotificationByKey(key: string) {
+  const [notification] = await db
+    .select()
+    .from(notifications)
+    .where(eq(notifications.notificationKey, key))
+    .limit(1);
+  return notification ?? null;
 }
 
 export async function getNotificationsByUserId(userId: string) {

@@ -2,6 +2,7 @@ import { Inngest } from "inngest";
 import { processDeadlineChecks } from "./deadline-checker";
 import { processPaymentFollowUps } from "./payment-follower";
 import { processDeliverableVerification } from "./deliverable-verifier";
+import { processStatusTransitions } from "./status-transitioner";
 
 export const inngest: Inngest = new Inngest({
   id: "sponsorsync",
@@ -34,6 +35,16 @@ export const paymentFollowUpFunction = inngest.createFunction(
   async ({ step }) => {
     await step.run("check-overdue-payments", async () => {
       return processPaymentFollowUps();
+    });
+  }
+);
+
+export const statusTransitionFunction = inngest.createFunction(
+  { id: "status-transitioner", name: "Status Transitioner" },
+  { cron: "0 11 * * *" },
+  async ({ step }) => {
+    await step.run("transition-overdue-statuses", async () => {
+      return processStatusTransitions();
     });
   }
 );
