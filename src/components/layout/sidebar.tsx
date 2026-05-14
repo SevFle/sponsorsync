@@ -5,6 +5,7 @@ export function Sidebar() {
     { href: "/dashboard/sponsors", label: "Sponsors" },
     { href: "/dashboard/deliverables", label: "Deliverables" },
     { href: "/dashboard/payments", label: "Payments" },
+    { href: "/dashboard/analytics", label: "Analytics" },
     { href: "/dashboard/templates", label: "Templates" },
     { href: "/dashboard/integrations", label: "Integrations" },
     { href: "/dashboard/settings", label: "Settings" },

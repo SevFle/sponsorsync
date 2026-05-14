@@ -55,7 +55,9 @@ function findKeywordInText(keyword: string, text: string, caseSensitive: boolean
   const searchKeyword = caseSensitive ? keyword : keyword.toLowerCase();
   const searchText = caseSensitive ? text : text.toLowerCase();
   const escaped = searchKeyword.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  const pattern = new RegExp(`\\b${escaped}\\b`);
+  const startBoundary = /^\w/.test(searchKeyword) ? "\\b" : "";
+  const endBoundary = /\w$/.test(searchKeyword) ? "\\b" : "";
+  const pattern = new RegExp(`${startBoundary}${escaped}${endBoundary}`);
   return pattern.test(searchText);
 }
 
@@ -75,8 +77,17 @@ export function matchKeywords(
   }
 
   let keywordConfidence = keywords.length > 0 ? matchedKeywords.length / keywords.length : 0;
+  if (opts.requireAllKeywords && matchedKeywords.length !== keywords.length) {
+    return {
+      matched: false,
+      confidence: 0,
+      matchedKeywords,
+      totalKeywords: keywords.length,
+      details: `${matchedKeywords.length}/${keywords.length} keyword(s) matched (requireAllKeywords): ${matchedKeywords.join(", ")}`,
+    };
+  }
   if (opts.requireAllKeywords) {
-    keywordConfidence = matchedKeywords.length === keywords.length ? 1 : 0;
+    keywordConfidence = 1;
   }
 
   let signalBoost = 0;
@@ -87,7 +98,7 @@ export function matchKeywords(
     }
   }
   if (signalCount > 0) {
-    signalBoost = Math.min(signalCount * 0.08, 0.2);
+    signalBoost = Math.min(signalCount * 0.2, 0.2);
   }
 
   let antiSignalPenalty = 0;

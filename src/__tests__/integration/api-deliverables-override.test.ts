@@ -9,9 +9,11 @@ vi.mock("@/lib/auth/config", () => ({
   authOptions: {},
 }));
 
-const mockUpdate = vi.fn();
-const mockSelect = vi.fn();
-const mockCreateVerificationLog = vi.fn().mockResolvedValue({ id: "log-1" });
+const { mockUpdate, mockSelect, mockCreateVerificationLog } = vi.hoisted(() => ({
+  mockUpdate: vi.fn(),
+  mockSelect: vi.fn(),
+  mockCreateVerificationLog: vi.fn().mockResolvedValue({ id: "log-1" }),
+}));
 
 vi.mock("@/lib/db", () => ({
   db: {
@@ -54,8 +56,9 @@ function makeChain(result: any) {
   const chain: Record<string, any> = {};
   chain.from = vi.fn().mockReturnValue(chain);
   chain.innerJoin = vi.fn().mockReturnValue(chain);
-  chain.where = vi.fn().mockResolvedValue(result);
+  chain.where = vi.fn().mockReturnValue(chain);
   chain.limit = vi.fn().mockReturnValue(chain);
+  chain.then = (resolve: any) => Promise.resolve(result).then(resolve);
   return chain;
 }
 

@@ -100,13 +100,15 @@ function analyzeSingleEpisode(
 
   if (episode.durationSeconds && episode.durationSeconds > 0) {
     const adTimestamp = extractAdTimestamp(episode, requirement);
-    timestampAnalysis = analyzeTimestamps({
-      adTimestampSeconds: adTimestamp,
-      episodeDurationSeconds: episode.durationSeconds,
-      requiredPlacement: requirement.requiredPlacement,
-      episodeTotalSegments: null,
-      adSegmentIndex: null,
-    });
+    if (adTimestamp !== null) {
+      timestampAnalysis = analyzeTimestamps({
+        adTimestampSeconds: adTimestamp,
+        episodeDurationSeconds: episode.durationSeconds,
+        requiredPlacement: requirement.requiredPlacement,
+        episodeTotalSegments: null,
+        adSegmentIndex: null,
+      });
+    }
   }
 
   let confidence = 0;
