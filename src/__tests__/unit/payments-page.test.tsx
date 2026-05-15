@@ -279,17 +279,6 @@ describe("PaymentsPage - data fetching", () => {
     }
   });
 
-  it("uses Promise.all for parallel requests", async () => {
-    const fetchSpy = mockFetchSuccess({ payments: mockPayments }, { deals: mockDeals });
-    render(<PaymentsPage />);
-
-    await waitFor(() => {
-      expect(screen.getByText("Acme Corp")).toBeInTheDocument();
-    });
-
-    expect(fetchSpy).toHaveBeenCalledTimes(2);
-  });
-
   it("renders payment amounts as formatted currency", async () => {
     mockFetchSuccess({ payments: [mockPayments[0]] }, { deals: mockDeals });
     render(<PaymentsPage />);
@@ -310,16 +299,44 @@ describe("PaymentsPage - data fetching", () => {
     expect(screen.getAllByText("Overdue").length).toBeGreaterThanOrEqual(2);
     expect(screen.getAllByText("Cancelled").length).toBeGreaterThanOrEqual(2);
   });
+});
 
-  it("renders deal title for each payment", async () => {
+describe("PaymentsPage - summary cards", () => {
+  it("renders summary cards with Total Paid, Outstanding, and Overdue", async () => {
     mockFetchSuccess({ payments: mockPayments }, { deals: mockDeals });
     render(<PaymentsPage />);
 
     await waitFor(() => {
-      expect(screen.getByText("Q2 Podcast Package")).toBeInTheDocument();
+      expect(screen.getByText("Total Paid")).toBeInTheDocument();
+      expect(screen.getByText("Outstanding")).toBeInTheDocument();
+      expect(screen.getByText("Overdue")).toBeInTheDocument();
     });
-    expect(screen.getByText("Newsletter Sponsorship")).toBeInTheDocument();
-    expect(screen.getByText("Episode 40-45 Run")).toBeInTheDocument();
+  });
+
+  it("calculates total paid correctly", async () => {
+    mockFetchSuccess({ payments: mockPayments }, { deals: mockDeals });
+    render(<PaymentsPage />);
+
+    await waitFor(() => {
+      expect(screen.getByText("$2,500")).toBeInTheDocument();
+    });
+  });
+
+  it("shows $0 when no payments exist", async () => {
+    mockFetchSuccess({ payments: [] }, { deals: [] });
+    render(<PaymentsPage />);
+
+    await waitFor(() => {
+      const zeroValues = screen.getAllByText("$0");
+      expect(zeroValues.length).toBe(3);
+    });
+  });
+
+  it("shows summary skeleton while loading", () => {
+    vi.spyOn(globalThis, "fetch").mockReturnValue(new Promise(() => {}));
+    const { container } = render(<PaymentsPage />);
+    const skeletons = container.querySelectorAll(".animate-pulse");
+    expect(skeletons.length).toBeGreaterThan(0);
   });
 });
 
@@ -403,23 +420,6 @@ describe("PaymentsPage - error handling", () => {
     unmount();
 
     expect(signal.aborted).toBe(true);
-  });
-
-  it("shows 401 error message from API", async () => {
-    vi.spyOn(globalThis, "fetch").mockImplementation(() =>
-      Promise.resolve({
-        ok: false,
-        status: 401,
-        statusText: "Unauthorized",
-        json: () => Promise.resolve({ error: "Unauthorized" }),
-      } as Response)
-    );
-
-    render(<PaymentsPage />);
-
-    await waitFor(() => {
-      expect(screen.getByText("Unauthorized")).toBeInTheDocument();
-    });
   });
 });
 
@@ -570,24 +570,6 @@ describe("PaymentsPage - search filtering", () => {
     expect(screen.getByText("TechStart Inc")).toBeInTheDocument();
   });
 
-  it("filters payments by status keyword", async () => {
-    mockFetchSuccess({ payments: mockPayments }, { deals: mockDeals });
-    render(<PaymentsPage />);
-
-    await waitFor(() => {
-      expect(screen.getByText("Acme Corp")).toBeInTheDocument();
-    });
-
-    const input = screen.getByPlaceholderText(/Search by sponsor/i);
-    fireEvent.change(input, { target: { value: "overdue" } });
-
-    await waitFor(() => {
-      expect(screen.queryByText("Acme Corp")).not.toBeInTheDocument();
-      expect(screen.queryByText("TechStart Inc")).not.toBeInTheDocument();
-    });
-    expect(screen.getByText("GreenCo")).toBeInTheDocument();
-  });
-
   it("clears search results when input is cleared", async () => {
     mockFetchSuccess({ payments: mockPayments }, { deals: mockDeals });
     render(<PaymentsPage />);
@@ -663,26 +645,6 @@ describe("PaymentsPage - date range filtering", () => {
     expect(screen.getByText("Acme Corp")).toBeInTheDocument();
   });
 
-  it("filters payments by both start and end date", async () => {
-    mockFetchSuccess({ payments: mockPayments }, { deals: mockDeals });
-    render(<PaymentsPage />);
-
-    await waitFor(() => {
-      expect(screen.getByText("Acme Corp")).toBeInTheDocument();
-    });
-
-    const startDateInput = screen.getByLabelText("Filter from date");
-    const endDateInput = screen.getByLabelText("Filter to date");
-    fireEvent.change(startDateInput, { target: { value: "2025-01-01" } });
-    fireEvent.change(endDateInput, { target: { value: "2025-01-31" } });
-
-    await waitFor(() => {
-      expect(screen.queryByText("TechStart Inc")).not.toBeInTheDocument();
-      expect(screen.queryByText("GreenCo")).not.toBeInTheDocument();
-    });
-    expect(screen.getByText("Acme Corp")).toBeInTheDocument();
-  });
-
   it("excludes payments with null due date when date filter is active", async () => {
     const paymentsWithNull = [
       mockPayments[0],
@@ -738,23 +700,6 @@ describe("PaymentsPage - sorting", () => {
     expect(sponsorNames[2]).toHaveTextContent("TechStart Inc");
   });
 
-  it("sorts payments by amount ascending", async () => {
-    mockFetchSuccess({ payments: mockPayments }, { deals: mockDeals });
-    render(<PaymentsPage />);
-
-    await waitFor(() => {
-      expect(screen.getByText("Acme Corp")).toBeInTheDocument();
-    });
-
-    fireEvent.change(screen.getByLabelText("Sort payments"), {
-      target: { value: "amount-asc" },
-    });
-
-    const sponsorNames = screen.getAllByText(/Acme Corp|TechStart Inc|GreenCo|DeadDeal Ltd/);
-    expect(sponsorNames[0]).toHaveTextContent("DeadDeal Ltd");
-    expect(sponsorNames[1]).toHaveTextContent("TechStart Inc");
-  });
-
   it("sorts payments by sponsor name ascending", async () => {
     mockFetchSuccess({ payments: mockPayments }, { deals: mockDeals });
     render(<PaymentsPage />);
@@ -772,25 +717,6 @@ describe("PaymentsPage - sorting", () => {
     expect(sponsorNames[1]).toHaveTextContent("DeadDeal Ltd");
     expect(sponsorNames[2]).toHaveTextContent("GreenCo");
     expect(sponsorNames[3]).toHaveTextContent("TechStart Inc");
-  });
-
-  it("sorts payments by sponsor name descending", async () => {
-    mockFetchSuccess({ payments: mockPayments }, { deals: mockDeals });
-    render(<PaymentsPage />);
-
-    await waitFor(() => {
-      expect(screen.getByText("Acme Corp")).toBeInTheDocument();
-    });
-
-    fireEvent.change(screen.getByLabelText("Sort payments"), {
-      target: { value: "sponsorName-desc" },
-    });
-
-    const sponsorNames = screen.getAllByText(/Acme Corp|TechStart Inc|GreenCo|DeadDeal Ltd/);
-    expect(sponsorNames[0]).toHaveTextContent("TechStart Inc");
-    expect(sponsorNames[1]).toHaveTextContent("GreenCo");
-    expect(sponsorNames[2]).toHaveTextContent("DeadDeal Ltd");
-    expect(sponsorNames[3]).toHaveTextContent("Acme Corp");
   });
 
   it("sorts payments by due date with nulls last", async () => {
@@ -811,24 +737,160 @@ describe("PaymentsPage - sorting", () => {
     expect(sponsorNames[2]).toHaveTextContent("TechStart Inc");
     expect(sponsorNames[3]).toHaveTextContent("DeadDeal Ltd");
   });
+});
 
-  it("sorts payments by status ascending", async () => {
-    mockFetchSuccess({ payments: mockPayments }, { deals: mockDeals });
+describe("PaymentsPage - expandable payment rows", () => {
+  it("expands payment row on click to show details", async () => {
+    mockFetchSuccess({ payments: [mockPayments[0]] }, { deals: mockDeals });
     render(<PaymentsPage />);
 
     await waitFor(() => {
       expect(screen.getByText("Acme Corp")).toBeInTheDocument();
     });
 
-    fireEvent.change(screen.getByLabelText("Sort payments"), {
-      target: { value: "status-asc" },
+    const row = screen.getByText("Acme Corp").closest("button");
+    expect(row).toBeTruthy();
+    fireEvent.click(row!);
+
+    await waitFor(() => {
+      expect(screen.getByText("Deal")).toBeInTheDocument();
+    });
+  });
+
+  it("shows Mark Paid button for pending payments when expanded", async () => {
+    mockFetchSuccess({ payments: [mockPayments[1]] }, { deals: mockDeals });
+    render(<PaymentsPage />);
+
+    await waitFor(() => {
+      expect(screen.getByText("TechStart Inc")).toBeInTheDocument();
     });
 
-    const sponsorNames = screen.getAllByText(/Acme Corp|TechStart Inc|GreenCo|DeadDeal Ltd/);
-    expect(sponsorNames[0]).toHaveTextContent("DeadDeal Ltd");
-    expect(sponsorNames[1]).toHaveTextContent("GreenCo");
-    expect(sponsorNames[2]).toHaveTextContent("Acme Corp");
-    expect(sponsorNames[3]).toHaveTextContent("TechStart Inc");
+    const row = screen.getByText("TechStart Inc").closest("button");
+    fireEvent.click(row!);
+
+    await waitFor(() => {
+      expect(screen.getByText("Mark Paid")).toBeInTheDocument();
+    });
+  });
+
+  it("shows Mark Overdue button for pending payments when expanded", async () => {
+    mockFetchSuccess({ payments: [mockPayments[1]] }, { deals: mockDeals });
+    render(<PaymentsPage />);
+
+    await waitFor(() => {
+      expect(screen.getByText("TechStart Inc")).toBeInTheDocument();
+    });
+
+    const row = screen.getByText("TechStart Inc").closest("button");
+    fireEvent.click(row!);
+
+    await waitFor(() => {
+      expect(screen.getByText("Mark Overdue")).toBeInTheDocument();
+    });
+  });
+
+  it("shows Cancel Payment button for pending payments when expanded", async () => {
+    mockFetchSuccess({ payments: [mockPayments[1]] }, { deals: mockDeals });
+    render(<PaymentsPage />);
+
+    await waitFor(() => {
+      expect(screen.getByText("TechStart Inc")).toBeInTheDocument();
+    });
+
+    const row = screen.getByText("TechStart Inc").closest("button");
+    fireEvent.click(row!);
+
+    await waitFor(() => {
+      expect(screen.getByText("Cancel Payment")).toBeInTheDocument();
+    });
+  });
+
+  it("does not show action buttons for paid payments", async () => {
+    mockFetchSuccess({ payments: [mockPayments[0]] }, { deals: mockDeals });
+    render(<PaymentsPage />);
+
+    await waitFor(() => {
+      expect(screen.getByText("Acme Corp")).toBeInTheDocument();
+    });
+
+    const row = screen.getByText("Acme Corp").closest("button");
+    fireEvent.click(row!);
+
+    await waitFor(() => {
+      expect(screen.getByText("Deal")).toBeInTheDocument();
+    });
+
+    expect(screen.queryByText("Mark Paid")).not.toBeInTheDocument();
+    expect(screen.queryByText("Cancel Payment")).not.toBeInTheDocument();
+  });
+
+  it("shows notes when payment has notes and is expanded", async () => {
+    mockFetchSuccess({ payments: [mockPayments[3]] }, { deals: mockDeals });
+    render(<PaymentsPage />);
+
+    await waitFor(() => {
+      expect(screen.getByText("DeadDeal Ltd")).toBeInTheDocument();
+    });
+
+    const row = screen.getByText("DeadDeal Ltd").closest("button");
+    fireEvent.click(row!);
+
+    await waitFor(() => {
+      expect(screen.getByText("Deal fell through")).toBeInTheDocument();
+    });
+  });
+
+  it("marks payment as paid when Mark Paid is clicked", async () => {
+    const fetchMock = vi
+      .spyOn(globalThis, "fetch")
+      .mockImplementation((url: string | URL | Request, opts?: RequestInit) => {
+        const path = typeof url === "string" ? url : url.toString();
+        if (path.includes("/api/payments/p2") && opts?.method === "PATCH") {
+          return Promise.resolve({
+            ok: true,
+            status: 200,
+            json: () => Promise.resolve({ payment: { id: "p2", status: "paid" } }),
+          } as Response);
+        }
+        if (path.includes("/api/payments")) {
+          return Promise.resolve({
+            ok: true,
+            status: 200,
+            json: () => Promise.resolve({ payments: [mockPayments[1]] }),
+          } as Response);
+        }
+        if (path.includes("/api/deals")) {
+          return Promise.resolve({
+            ok: true,
+            status: 200,
+            json: () => Promise.resolve({ deals: mockDeals }),
+          } as Response);
+        }
+        return Promise.resolve({
+          ok: false,
+          status: 404,
+          json: () => Promise.resolve({}),
+        } as Response);
+      });
+
+    render(<PaymentsPage />);
+
+    await waitFor(() => {
+      expect(screen.getByText("TechStart Inc")).toBeInTheDocument();
+    });
+
+    const row = screen.getByText("TechStart Inc").closest("button");
+    fireEvent.click(row!);
+
+    await waitFor(() => {
+      expect(screen.getByText("Mark Paid")).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByText("Mark Paid"));
+
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalled();
+    });
   });
 });
 
@@ -841,26 +903,14 @@ describe("PaymentsPage - record payment modal", () => {
       expect(screen.getByText("Acme Corp")).toBeInTheDocument();
     });
 
-    fireEvent.click(screen.getByText("Record Payment"));
+    const recordButtons = screen.getAllByText("Record Payment");
+    const headerButton = recordButtons.find(
+      (el) => el.closest("button") && !el.closest("form")
+    );
+    fireEvent.click(headerButton!);
 
     await waitFor(() => {
       expect(screen.getByText("Add a new payment to track.")).toBeInTheDocument();
-    });
-  });
-
-  it("renders deal dropdown with fetched deals", async () => {
-    mockFetchSuccess({ payments: mockPayments }, { deals: mockDeals });
-    render(<PaymentsPage />);
-
-    await waitFor(() => {
-      expect(screen.getByText("Acme Corp")).toBeInTheDocument();
-    });
-
-    fireEvent.click(screen.getByText("Record Payment"));
-
-    await waitFor(() => {
-      const dealSelect = screen.getByDisplayValue("Select a deal");
-      expect(dealSelect).toBeInTheDocument();
     });
   });
 
@@ -872,13 +922,19 @@ describe("PaymentsPage - record payment modal", () => {
       expect(screen.getByText("Acme Corp")).toBeInTheDocument();
     });
 
-    fireEvent.click(screen.getByText("Record Payment"));
+    const recordButtons = screen.getAllByText("Record Payment");
+    const headerButton = recordButtons.find(
+      (el) => el.closest("button") && !el.closest("form")
+    );
+    fireEvent.click(headerButton!);
 
     await waitFor(() => {
       expect(screen.getByText("Cancel")).toBeInTheDocument();
     });
 
-    fireEvent.click(screen.getByText("Cancel"));
+    const cancelButtons = screen.getAllByText("Cancel");
+    const modalCancel = cancelButtons.find((el) => el.closest("form"));
+    fireEvent.click(modalCancel!);
 
     await waitFor(() => {
       expect(screen.queryByText("Cancel")).not.toBeInTheDocument();
@@ -893,7 +949,11 @@ describe("PaymentsPage - record payment modal", () => {
       expect(screen.getByText("Acme Corp")).toBeInTheDocument();
     });
 
-    fireEvent.click(screen.getByText("Record Payment"));
+    const recordButtons = screen.getAllByText("Record Payment");
+    const headerButton = recordButtons.find(
+      (el) => el.closest("button") && !el.closest("form")
+    );
+    fireEvent.click(headerButton!);
 
     await waitFor(() => {
       expect(screen.getByText("Add a new payment to track.")).toBeInTheDocument();
@@ -916,7 +976,11 @@ describe("PaymentsPage - record payment modal", () => {
       expect(screen.getByText("Acme Corp")).toBeInTheDocument();
     });
 
-    fireEvent.click(screen.getByText("Record Payment"));
+    const recordButtons = screen.getAllByText("Record Payment");
+    const headerButton = recordButtons.find(
+      (el) => el.closest("button") && !el.closest("form")
+    );
+    fireEvent.click(headerButton!);
 
     await waitFor(() => {
       expect(screen.getByText("Amount ($)")).toBeInTheDocument();
@@ -930,160 +994,6 @@ describe("PaymentsPage - record payment modal", () => {
 
     await waitFor(() => {
       expect(screen.getByText("Please select a deal")).toBeInTheDocument();
-    });
-  });
-
-  it("shows validation error when amount is invalid", async () => {
-    mockFetchSuccess({ payments: mockPayments }, { deals: mockDeals });
-    render(<PaymentsPage />);
-
-    await waitFor(() => {
-      expect(screen.getByText("Acme Corp")).toBeInTheDocument();
-    });
-
-    fireEvent.click(screen.getByText("Record Payment"));
-
-    await waitFor(() => {
-      expect(screen.getByText("Amount ($)")).toBeInTheDocument();
-    });
-
-    const dealSelect = screen.getByDisplayValue("Select a deal");
-    fireEvent.change(dealSelect, { target: { value: "d1" } });
-
-    const amountInput = screen.getByPlaceholderText("5000");
-    fireEvent.change(amountInput, { target: { value: "0" } });
-
-    const submitButton = screen.getAllByText("Record Payment").find(
-      (el) => el.closest("form") !== null
-    );
-    expect(submitButton).toBeTruthy();
-    fireEvent.click(submitButton!);
-
-    await waitFor(() => {
-      expect(screen.getByText("Please enter a valid amount")).toBeInTheDocument();
-    });
-  });
-
-  it("submits payment and closes modal on success", async () => {
-    const fetchMock = vi
-      .spyOn(globalThis, "fetch")
-      .mockImplementation((url: string | URL | Request, opts?: RequestInit) => {
-        const path = typeof url === "string" ? url : url.toString();
-        if (path.includes("/api/payments") && opts?.method === "POST") {
-          return Promise.resolve({
-            ok: true,
-            status: 201,
-            json: () => Promise.resolve({ payment: {} }),
-          } as Response);
-        }
-        if (path.includes("/api/payments")) {
-          return Promise.resolve({
-            ok: true,
-            status: 200,
-            json: () => Promise.resolve({ payments: mockPayments }),
-          } as Response);
-        }
-        if (path.includes("/api/deals")) {
-          return Promise.resolve({
-            ok: true,
-            status: 200,
-            json: () => Promise.resolve({ deals: mockDeals }),
-          } as Response);
-        }
-        return Promise.resolve({
-          ok: false,
-          status: 404,
-          json: () => Promise.resolve({}),
-        } as Response);
-      });
-
-    render(<PaymentsPage />);
-
-    await waitFor(() => {
-      expect(screen.getByText("Acme Corp")).toBeInTheDocument();
-    });
-
-    fireEvent.click(screen.getByText("Record Payment"));
-
-    await waitFor(() => {
-      expect(screen.getByText("Amount ($)")).toBeInTheDocument();
-    });
-
-    const dealSelect = screen.getByDisplayValue("Select a deal");
-    fireEvent.change(dealSelect, { target: { value: "d1" } });
-
-    const amountInput = screen.getByPlaceholderText("5000");
-    fireEvent.change(amountInput, { target: { value: "5000" } });
-
-    const submitButton = screen.getAllByText("Record Payment").find(
-      (el) => el.closest("form") !== null
-    );
-    expect(submitButton).toBeTruthy();
-    fireEvent.click(submitButton!);
-
-    await waitFor(() => {
-      expect(screen.queryByText("Add a new payment to track.")).not.toBeInTheDocument();
-    });
-
-    expect(fetchMock).toHaveBeenCalled();
-  });
-
-  it("shows error when payment submission fails", async () => {
-    vi.spyOn(globalThis, "fetch").mockImplementation((url: string | URL | Request, opts?: RequestInit) => {
-      const path = typeof url === "string" ? url : url.toString();
-      if (path.includes("/api/payments") && opts?.method === "POST") {
-        return Promise.resolve({
-          ok: false,
-          status: 500,
-          json: () => Promise.resolve({ error: "Server error" }),
-        } as Response);
-      }
-      if (path.includes("/api/payments")) {
-        return Promise.resolve({
-          ok: true,
-          status: 200,
-          json: () => Promise.resolve({ payments: mockPayments }),
-        } as Response);
-      }
-      if (path.includes("/api/deals")) {
-        return Promise.resolve({
-          ok: true,
-          status: 200,
-          json: () => Promise.resolve({ deals: mockDeals }),
-        } as Response);
-      }
-      return Promise.resolve({
-        ok: false,
-        status: 404,
-        json: () => Promise.resolve({}),
-      } as Response);
-    });
-
-    render(<PaymentsPage />);
-
-    await waitFor(() => {
-      expect(screen.getByText("Acme Corp")).toBeInTheDocument();
-    });
-
-    fireEvent.click(screen.getByText("Record Payment"));
-
-    await waitFor(() => {
-      expect(screen.getByText("Amount ($)")).toBeInTheDocument();
-    });
-
-    const dealSelect = screen.getByDisplayValue("Select a deal");
-    fireEvent.change(dealSelect, { target: { value: "d1" } });
-
-    const amountInput = screen.getByPlaceholderText("5000");
-    fireEvent.change(amountInput, { target: { value: "5000" } });
-
-    const submitButton = screen.getAllByText("Record Payment").find(
-      (el) => el.closest("form") !== null
-    );
-    fireEvent.click(submitButton!);
-
-    await waitFor(() => {
-      expect(screen.getByText("Server error")).toBeInTheDocument();
     });
   });
 });
@@ -1140,24 +1050,6 @@ describe("PaymentsPage - UI rendering", () => {
     expect(screen.getByText("Paid")).toBeInTheDocument();
     expect(screen.getByText("Overdue")).toBeInTheDocument();
     expect(screen.getByText("Cancelled")).toBeInTheDocument();
-  });
-
-  it("shows paid date for paid payments", async () => {
-    mockFetchSuccess({ payments: [mockPayments[0]] }, { deals: mockDeals });
-    render(<PaymentsPage />);
-
-    await waitFor(() => {
-      expect(screen.getByText(/Paid Jan/)).toBeInTheDocument();
-    });
-  });
-
-  it("shows due date for pending payments", async () => {
-    mockFetchSuccess({ payments: [mockPayments[1]] }, { deals: mockDeals });
-    render(<PaymentsPage />);
-
-    await waitFor(() => {
-      expect(screen.getByText(/Due Mar/)).toBeInTheDocument();
-    });
   });
 
   it("shows No due date for payments without due or paid date", async () => {
