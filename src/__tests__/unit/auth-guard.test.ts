@@ -59,6 +59,41 @@ describe("getServerSessionOrNull", () => {
     await getServerSessionOrNull();
     expect(getServerSession).toHaveBeenCalledWith({});
   });
+
+  it("returns null when session is undefined", async () => {
+    (getServerSession as ReturnType<typeof vi.fn>).mockResolvedValue(undefined as any);
+
+    const result = await getServerSessionOrNull();
+    expect(result).toBeNull();
+  });
+
+  it("returns session when session has expires field", async () => {
+    const sessionWithExpires = { ...mockSession, expires: "2025-12-31T23:59:59.000Z" };
+    (getServerSession as ReturnType<typeof vi.fn>).mockResolvedValue(sessionWithExpires);
+
+    const result = await getServerSessionOrNull();
+    expect(result).toEqual(sessionWithExpires);
+  });
+
+  it("returns session with minimal user object", async () => {
+    (getServerSession as ReturnType<typeof vi.fn>).mockResolvedValue({ user: { id: "u1" } });
+
+    const result = await getServerSessionOrNull();
+    expect(result).toEqual({ user: { id: "u1" } });
+  });
+
+  it("propagates getServerSession errors", async () => {
+    (getServerSession as ReturnType<typeof vi.fn>).mockRejectedValue(new Error("Auth service down"));
+
+    await expect(getServerSessionOrNull()).rejects.toThrow("Auth service down");
+  });
+
+  it("returns session even when user id is numeric (not its job to validate)", async () => {
+    (getServerSession as ReturnType<typeof vi.fn>).mockResolvedValue({ user: { id: 42 } } as any);
+
+    const result = await getServerSessionOrNull();
+    expect(result).toEqual({ user: { id: 42 } });
+  });
 });
 
 describe("getAuthenticatedSession", () => {
@@ -116,6 +151,83 @@ describe("getAuthenticatedSession", () => {
 
     const result = await getAuthenticatedSession();
     expect(result).toBeNull();
+  });
+
+  it("returns null when session user id is a number", async () => {
+    (getServerSession as ReturnType<typeof vi.fn>).mockResolvedValue({ user: { id: 123 } } as any);
+
+    const result = await getAuthenticatedSession();
+    expect(result).toBeNull();
+  });
+
+  it("returns null when session user id is zero", async () => {
+    (getServerSession as ReturnType<typeof vi.fn>).mockResolvedValue({ user: { id: 0 } } as any);
+
+    const result = await getAuthenticatedSession();
+    expect(result).toBeNull();
+  });
+
+  it("returns null when session user id is boolean", async () => {
+    (getServerSession as ReturnType<typeof vi.fn>).mockResolvedValue({ user: { id: true } } as any);
+
+    const result = await getAuthenticatedSession();
+    expect(result).toBeNull();
+  });
+
+  it("returns null when session user id is an object", async () => {
+    (getServerSession as ReturnType<typeof vi.fn>).mockResolvedValue({ user: { id: { value: "x" } } } as any);
+
+    const result = await getAuthenticatedSession();
+    expect(result).toBeNull();
+  });
+
+  it("returns null when session user id is an array", async () => {
+    (getServerSession as ReturnType<typeof vi.fn>).mockResolvedValue({ user: { id: ["user-1"] } } as any);
+
+    const result = await getAuthenticatedSession();
+    expect(result).toBeNull();
+  });
+
+  it("returns null when session user is null", async () => {
+    (getServerSession as ReturnType<typeof vi.fn>).mockResolvedValue({ user: null } as any);
+
+    const result = await getAuthenticatedSession();
+    expect(result).toBeNull();
+  });
+
+  it("returns null when session user id has only tabs", async () => {
+    (getServerSession as ReturnType<typeof vi.fn>).mockResolvedValue({ user: { id: "\t\t" } });
+
+    const result = await getAuthenticatedSession();
+    expect(result).toBeNull();
+  });
+
+  it("returns null when session user id has only newlines", async () => {
+    (getServerSession as ReturnType<typeof vi.fn>).mockResolvedValue({ user: { id: "\n\r\n" } });
+
+    const result = await getAuthenticatedSession();
+    expect(result).toBeNull();
+  });
+
+  it("returns null when session user id is mixed whitespace", async () => {
+    (getServerSession as ReturnType<typeof vi.fn>).mockResolvedValue({ user: { id: " \t\n " } });
+
+    const result = await getAuthenticatedSession();
+    expect(result).toBeNull();
+  });
+
+  it("accepts session with valid id that has surrounding whitespace", async () => {
+    const sessionWithPaddedId = { user: { id: " user-1 ", email: "test@test.com" } };
+    (getServerSession as ReturnType<typeof vi.fn>).mockResolvedValue(sessionWithPaddedId);
+
+    const result = await getAuthenticatedSession();
+    expect(result).toEqual(sessionWithPaddedId);
+  });
+
+  it("propagates getServerSession errors", async () => {
+    (getServerSession as ReturnType<typeof vi.fn>).mockRejectedValue(new Error("Network error"));
+
+    await expect(getAuthenticatedSession()).rejects.toThrow("Network error");
   });
 });
 
@@ -182,5 +294,74 @@ describe("requireAuth", () => {
     );
 
     await expect(requireAuth()).rejects.toThrow("Session lookup failed");
+  });
+
+  it("redirects to /login when session user has numeric id", async () => {
+    (getServerSession as ReturnType<typeof vi.fn>).mockResolvedValue({ user: { id: 123 } } as any);
+
+    await expect(requireAuth()).rejects.toThrow("NEXT_REDIRECT");
+    expect(redirect).toHaveBeenCalledWith("/login");
+  });
+
+  it("redirects to /login when session user is explicitly null", async () => {
+    (getServerSession as ReturnType<typeof vi.fn>).mockResolvedValue({ user: null } as any);
+
+    await expect(requireAuth()).rejects.toThrow("NEXT_REDIRECT");
+    expect(redirect).toHaveBeenCalledWith("/login");
+  });
+
+  it("redirects to /login when session user id is boolean true", async () => {
+    (getServerSession as ReturnType<typeof vi.fn>).mockResolvedValue({ user: { id: true } } as any);
+
+    await expect(requireAuth()).rejects.toThrow("NEXT_REDIRECT");
+    expect(redirect).toHaveBeenCalledWith("/login");
+  });
+
+  it("redirects to /login when session user id is an object", async () => {
+    (getServerSession as ReturnType<typeof vi.fn>).mockResolvedValue({ user: { id: { value: "user-1" } } } as any);
+
+    await expect(requireAuth()).rejects.toThrow("NEXT_REDIRECT");
+    expect(redirect).toHaveBeenCalledWith("/login");
+  });
+
+  it("redirects to /login when session user id is an array", async () => {
+    (getServerSession as ReturnType<typeof vi.fn>).mockResolvedValue({ user: { id: ["user-1"] } } as any);
+
+    await expect(requireAuth()).rejects.toThrow("NEXT_REDIRECT");
+    expect(redirect).toHaveBeenCalledWith("/login");
+  });
+
+  it("redirects to /login when session user id has only tabs", async () => {
+    (getServerSession as ReturnType<typeof vi.fn>).mockResolvedValue({ user: { id: "\t\t" } });
+
+    await expect(requireAuth()).rejects.toThrow("NEXT_REDIRECT");
+    expect(redirect).toHaveBeenCalledWith("/login");
+  });
+
+  it("redirects to /login when session user id has only newlines", async () => {
+    (getServerSession as ReturnType<typeof vi.fn>).mockResolvedValue({ user: { id: "\n\n" } });
+
+    await expect(requireAuth()).rejects.toThrow("NEXT_REDIRECT");
+    expect(redirect).toHaveBeenCalledWith("/login");
+  });
+
+  it("redirects to /login when session user id is zero", async () => {
+    (getServerSession as ReturnType<typeof vi.fn>).mockResolvedValue({ user: { id: 0 } } as any);
+
+    await expect(requireAuth()).rejects.toThrow("NEXT_REDIRECT");
+    expect(redirect).toHaveBeenCalledWith("/login");
+  });
+
+  it("accepts session with valid id after previously rejecting", async () => {
+    (getServerSession as ReturnType<typeof vi.fn>).mockResolvedValue(null);
+    await expect(requireAuth()).rejects.toThrow("NEXT_REDIRECT");
+
+    vi.clearAllMocks();
+    vi.mocked(redirect).mockImplementation(() => { throw new Error("NEXT_REDIRECT"); });
+
+    (getServerSession as ReturnType<typeof vi.fn>).mockResolvedValue(mockSession);
+    const result = await requireAuth();
+    expect(result).toEqual(mockSession);
+    expect(redirect).not.toHaveBeenCalled();
   });
 });

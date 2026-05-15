@@ -221,4 +221,154 @@ describe("getDashboardData - consolidation", () => {
 
     await expect(getDashboardData("user-1")).rejects.toThrow("Connection refused");
   });
+
+  it("throws for null userId", async () => {
+    await expect(getDashboardData(null as any)).rejects.toThrow("Invalid user ID");
+  });
+
+  it("throws for undefined userId", async () => {
+    await expect(getDashboardData(undefined as any)).rejects.toThrow("Invalid user ID");
+  });
+
+  it("handles payments with no matching deal", async () => {
+    (getSponsorsByUserId as ReturnType<typeof vi.fn>).mockResolvedValue([]);
+    (getDealsByUserId as ReturnType<typeof vi.fn>).mockResolvedValue([]);
+    (getDeliverablesByUserId as ReturnType<typeof vi.fn>).mockResolvedValue([]);
+    (getPaymentsByUserId as ReturnType<typeof vi.fn>).mockResolvedValue([
+      { id: "p1", dealId: "nonexistent", status: "paid", amount: 1000, paidDate: "2025-01-15", dueDate: null, currency: "USD", createdAt: "2025-01-15" },
+    ]);
+
+    const result = await getDashboardData("user-1");
+
+    expect(result.payments[0].dealTitle).toBeUndefined();
+    expect(result.payments[0].sponsorName).toBeUndefined();
+  });
+
+  it("handles deliverables with no matching deal", async () => {
+    (getSponsorsByUserId as ReturnType<typeof vi.fn>).mockResolvedValue([]);
+    (getDealsByUserId as ReturnType<typeof vi.fn>).mockResolvedValue([]);
+    (getDeliverablesByUserId as ReturnType<typeof vi.fn>).mockResolvedValue([
+      { id: "dl1", dealId: "nonexistent", title: "Orphan", status: "pending", dueDate: null },
+    ]);
+    (getPaymentsByUserId as ReturnType<typeof vi.fn>).mockResolvedValue([]);
+
+    const result = await getDashboardData("user-1");
+
+    expect(result.deliverables[0].dealTitle).toBeUndefined();
+    expect(result.deliverables[0].sponsorName).toBeUndefined();
+  });
+
+  it("defaults currency to USD when null", async () => {
+    (getSponsorsByUserId as ReturnType<typeof vi.fn>).mockResolvedValue([]);
+    (getDealsByUserId as ReturnType<typeof vi.fn>).mockResolvedValue([
+      { id: "d1", sponsorId: "s1", title: "No Currency", status: "active", totalValue: 500, currency: null, endDate: null },
+    ]);
+    (getDeliverablesByUserId as ReturnType<typeof vi.fn>).mockResolvedValue([]);
+    (getPaymentsByUserId as ReturnType<typeof vi.fn>).mockResolvedValue([
+      { id: "p1", dealId: "d1", status: "paid", amount: 500, paidDate: "2025-01-01", dueDate: null, currency: null, createdAt: "2025-01-01" },
+    ]);
+
+    const result = await getDashboardData("user-1");
+
+    expect(result.deals[0].currency).toBe("USD");
+    expect(result.payments[0].currency).toBe("USD");
+  });
+
+  it("converts Date objects in payment createdAt to ISO string", async () => {
+    const date = new Date("2025-06-15T10:30:00.000Z");
+    (getSponsorsByUserId as ReturnType<typeof vi.fn>).mockResolvedValue([]);
+    (getDealsByUserId as ReturnType<typeof vi.fn>).mockResolvedValue([]);
+    (getDeliverablesByUserId as ReturnType<typeof vi.fn>).mockResolvedValue([]);
+    (getPaymentsByUserId as ReturnType<typeof vi.fn>).mockResolvedValue([
+      { id: "p1", dealId: "d1", status: "paid", amount: 1000, paidDate: "2025-06-15", dueDate: null, currency: "USD", createdAt: date },
+    ]);
+
+    const result = await getDashboardData("user-1");
+
+    expect(result.payments[0].createdAt).toBe(date.toISOString());
+  });
+
+  it("handles string createdAt in payments", async () => {
+    (getSponsorsByUserId as ReturnType<typeof vi.fn>).mockResolvedValue([]);
+    (getDealsByUserId as ReturnType<typeof vi.fn>).mockResolvedValue([]);
+    (getDeliverablesByUserId as ReturnType<typeof vi.fn>).mockResolvedValue([]);
+    (getPaymentsByUserId as ReturnType<typeof vi.fn>).mockResolvedValue([
+      { id: "p1", dealId: "d1", status: "paid", amount: 1000, paidDate: "2025-01-01", dueDate: null, currency: "USD", createdAt: "2025-01-01T00:00:00Z" },
+    ]);
+
+    const result = await getDashboardData("user-1");
+
+    expect(result.payments[0].createdAt).toBe("2025-01-01T00:00:00Z");
+  });
+
+  it("handles null createdAt in payments", async () => {
+    (getSponsorsByUserId as ReturnType<typeof vi.fn>).mockResolvedValue([]);
+    (getDealsByUserId as ReturnType<typeof vi.fn>).mockResolvedValue([]);
+    (getDeliverablesByUserId as ReturnType<typeof vi.fn>).mockResolvedValue([]);
+    (getPaymentsByUserId as ReturnType<typeof vi.fn>).mockResolvedValue([
+      { id: "p1", dealId: "d1", status: "paid", amount: 1000, paidDate: "2025-01-01", dueDate: null, currency: "USD", createdAt: null },
+    ]);
+
+    const result = await getDashboardData("user-1");
+
+    expect(result.payments[0].createdAt).toBe("");
+  });
+
+  it("does not query database when userId is invalid", async () => {
+    await expect(getDashboardData("")).rejects.toThrow("Invalid user ID");
+    expect(getDealsByUserId).not.toHaveBeenCalled();
+    expect(getDeliverablesByUserId).not.toHaveBeenCalled();
+    expect(getPaymentsByUserId).not.toHaveBeenCalled();
+    expect(getSponsorsByUserId).not.toHaveBeenCalled();
+  });
+
+  it("propagates errors from sponsors query", async () => {
+    (getSponsorsByUserId as ReturnType<typeof vi.fn>).mockRejectedValue(new Error("Sponsor query failed"));
+    (getDealsByUserId as ReturnType<typeof vi.fn>).mockResolvedValue([]);
+    (getDeliverablesByUserId as ReturnType<typeof vi.fn>).mockResolvedValue([]);
+    (getPaymentsByUserId as ReturnType<typeof vi.fn>).mockResolvedValue([]);
+
+    await expect(getDashboardData("user-1")).rejects.toThrow("Sponsor query failed");
+  });
+
+  it("returns deal with null totalValue and endDate", async () => {
+    (getSponsorsByUserId as ReturnType<typeof vi.fn>).mockResolvedValue([{ id: "s1", name: "Sponsor" }]);
+    (getDealsByUserId as ReturnType<typeof vi.fn>).mockResolvedValue([
+      { id: "d1", sponsorId: "s1", title: "Deal", status: "draft", totalValue: null, currency: "EUR", endDate: null },
+    ]);
+    (getDeliverablesByUserId as ReturnType<typeof vi.fn>).mockResolvedValue([]);
+    (getPaymentsByUserId as ReturnType<typeof vi.fn>).mockResolvedValue([]);
+
+    const result = await getDashboardData("user-1");
+
+    expect(result.deals[0]).toEqual({
+      id: "d1",
+      sponsorName: "Sponsor",
+      title: "Deal",
+      status: "draft",
+      totalValue: null,
+      currency: "EUR",
+      endDate: null,
+    });
+  });
+
+  it("enriches multiple deliverables linked to the same deal", async () => {
+    (getSponsorsByUserId as ReturnType<typeof vi.fn>).mockResolvedValue([{ id: "s1", name: "Sponsor" }]);
+    (getDealsByUserId as ReturnType<typeof vi.fn>).mockResolvedValue([
+      { id: "d1", sponsorId: "s1", title: "Shared Deal", status: "active", totalValue: 1000, currency: "USD", endDate: null },
+    ]);
+    (getDeliverablesByUserId as ReturnType<typeof vi.fn>).mockResolvedValue([
+      { id: "dl1", dealId: "d1", title: "Del 1", status: "pending", dueDate: "2025-07-01" },
+      { id: "dl2", dealId: "d1", title: "Del 2", status: "in_progress", dueDate: "2025-08-01" },
+    ]);
+    (getPaymentsByUserId as ReturnType<typeof vi.fn>).mockResolvedValue([]);
+
+    const result = await getDashboardData("user-1");
+
+    expect(result.deliverables).toHaveLength(2);
+    expect(result.deliverables[0].dealTitle).toBe("Shared Deal");
+    expect(result.deliverables[0].sponsorName).toBe("Sponsor");
+    expect(result.deliverables[1].dealTitle).toBe("Shared Deal");
+    expect(result.deliverables[1].sponsorName).toBe("Sponsor");
+  });
 });
