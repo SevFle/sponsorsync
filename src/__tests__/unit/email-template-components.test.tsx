@@ -274,28 +274,28 @@ describe("PaymentFollowupEmail", () => {
 describe("EmailLayout", () => {
   it("renders children", async () => {
     const html = await render(
-      React.createElement(EmailLayout, { preview: "Test preview", children: React.createElement("div", null, "Hello World") })
+      <EmailLayout preview="Test preview"><div>Hello World</div></EmailLayout>
     );
     expect(html).toContain("Hello World");
   });
 
   it("includes creator show name in header", async () => {
     const html = await render(
-      React.createElement(EmailLayout, { preview: "Test", creatorShow: "My Amazing Show", children: null })
+      <EmailLayout preview="Test" creatorShow="My Amazing Show"><div /></EmailLayout>
     );
     expect(html).toContain("My Amazing Show");
   });
 
   it("defaults to SponsorSync when no show name", async () => {
     const html = await render(
-      React.createElement(EmailLayout, { preview: "Test", children: null })
+      <EmailLayout preview="Test"><div /></EmailLayout>
     );
     expect(html).toContain("SponsorSync");
   });
 
   it("includes SponsorSync footer link", async () => {
     const html = await render(
-      React.createElement(EmailLayout, { preview: "Test", children: null })
+      <EmailLayout preview="Test"><div /></EmailLayout>
     );
     expect(html).toContain("sponsorsync.app");
   });
