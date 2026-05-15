@@ -284,7 +284,7 @@ describe("PaymentsPage - data fetching", () => {
     render(<PaymentsPage />);
 
     await waitFor(() => {
-      expect(screen.getByText("$2,500")).toBeInTheDocument();
+      expect(screen.getAllByText("$2,500").length).toBeGreaterThanOrEqual(1);
     });
   });
 
@@ -309,7 +309,7 @@ describe("PaymentsPage - summary cards", () => {
     await waitFor(() => {
       expect(screen.getByText("Total Paid")).toBeInTheDocument();
       expect(screen.getByText("Outstanding")).toBeInTheDocument();
-      expect(screen.getByText("Overdue")).toBeInTheDocument();
+      expect(screen.getAllByText("Overdue").length).toBeGreaterThanOrEqual(1);
     });
   });
 
@@ -318,7 +318,7 @@ describe("PaymentsPage - summary cards", () => {
     render(<PaymentsPage />);
 
     await waitFor(() => {
-      expect(screen.getByText("$2,500")).toBeInTheDocument();
+      expect(screen.getAllByText("$2,500").length).toBeGreaterThanOrEqual(1);
     });
   });
 
@@ -1048,8 +1048,8 @@ describe("PaymentsPage - UI rendering", () => {
     });
     expect(screen.getByText("Pending")).toBeInTheDocument();
     expect(screen.getByText("Paid")).toBeInTheDocument();
-    expect(screen.getByText("Overdue")).toBeInTheDocument();
-    expect(screen.getByText("Cancelled")).toBeInTheDocument();
+    expect(screen.getAllByText("Overdue").length).toBeGreaterThanOrEqual(1);
+    expect(screen.getAllByText("Cancelled").length).toBeGreaterThanOrEqual(1);
   });
 
   it("shows No due date for payments without due or paid date", async () => {

@@ -21,10 +21,15 @@ vi.mock("@/lib/db/queries/payments", () => ({
   getPaymentsByUserId: vi.fn(),
 }));
 
+vi.mock("@/lib/db/queries/sponsors", () => ({
+  getSponsorsByUserId: vi.fn(),
+}));
+
 import { getServerSession } from "next-auth";
 import { getDealsByUserId } from "@/lib/db/queries/deals";
 import { getDeliverablesByUserId } from "@/lib/db/queries/deliverables";
 import { getPaymentsByUserId } from "@/lib/db/queries/payments";
+import { getSponsorsByUserId } from "@/lib/db/queries/sponsors";
 
 const mockSession = { user: { id: "user-1", email: "test@test.com", name: "Test User" } };
 
@@ -35,6 +40,7 @@ function mockAuth(session: typeof mockSession | null) {
 beforeEach(() => {
   vi.clearAllMocks();
   mockAuth(mockSession);
+  (getSponsorsByUserId as ReturnType<typeof vi.fn>).mockResolvedValue([]);
 });
 
 describe("GET /api/dashboard - auth guards", () => {
