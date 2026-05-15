@@ -82,8 +82,8 @@ describe("GET /api/analytics/revenue - successful responses", () => {
 
   it("computes revenue from paid payments", async () => {
     (getPaymentsByUserId as ReturnType<typeof vi.fn>).mockResolvedValue([
-      { amount: 5000, status: "paid", paidDate: "2025-03-15", dueDate: null, currency: "USD" },
-      { amount: 3000, status: "paid", paidDate: "2025-03-20", dueDate: null, currency: "USD" },
+      { amount: 5000, status: "paid", paidDate: "2026-05-15", dueDate: null, currency: "USD" },
+      { amount: 3000, status: "paid", paidDate: "2026-05-10", dueDate: null, currency: "USD" },
     ]);
 
     const response = await GET(makeRequest("http://localhost:3000/api/analytics/revenue?range=30d"));
@@ -121,11 +121,11 @@ describe("GET /api/analytics/revenue - successful responses", () => {
 
   it("computes month-over-month change", async () => {
     (getPaymentsByUserId as ReturnType<typeof vi.fn>).mockResolvedValue([
-      { amount: 5000, status: "paid", paidDate: "2025-02-15", dueDate: null, currency: "USD" },
-      { amount: 10000, status: "paid", paidDate: "2025-03-15", dueDate: null, currency: "USD" },
+      { amount: 5000, status: "paid", paidDate: "2026-04-15", dueDate: null, currency: "USD" },
+      { amount: 10000, status: "paid", paidDate: "2026-05-15", dueDate: null, currency: "USD" },
     ]);
 
-    const response = await GET(makeRequest("http://localhost:3000/api/analytics/revenue"));
+    const response = await GET(makeRequest("http://localhost:3000/api/analytics/revenue?range=this_year"));
     const body = await response.json();
 
     expect(body.monthOverMonthChange).toBe(100);
@@ -133,18 +133,18 @@ describe("GET /api/analytics/revenue - successful responses", () => {
 
   it("returns monthly breakdown sorted ascending", async () => {
     (getPaymentsByUserId as ReturnType<typeof vi.fn>).mockResolvedValue([
-      { amount: 3000, status: "paid", paidDate: "2025-03-15", dueDate: null, currency: "USD" },
-      { amount: 5000, status: "paid", paidDate: "2025-01-15", dueDate: null, currency: "USD" },
-      { amount: 7000, status: "paid", paidDate: "2025-02-15", dueDate: null, currency: "USD" },
+      { amount: 3000, status: "paid", paidDate: "2026-05-15", dueDate: null, currency: "USD" },
+      { amount: 5000, status: "paid", paidDate: "2026-03-15", dueDate: null, currency: "USD" },
+      { amount: 7000, status: "paid", paidDate: "2026-04-15", dueDate: null, currency: "USD" },
     ]);
 
-    const response = await GET(makeRequest("http://localhost:3000/api/analytics/revenue"));
+    const response = await GET(makeRequest("http://localhost:3000/api/analytics/revenue?range=this_year"));
     const body = await response.json();
 
     expect(body.monthlyBreakdown).toHaveLength(3);
-    expect(body.monthlyBreakdown[0].month).toBe("2025-01");
-    expect(body.monthlyBreakdown[1].month).toBe("2025-02");
-    expect(body.monthlyBreakdown[2].month).toBe("2025-03");
+    expect(body.monthlyBreakdown[0].month).toBe("2026-03");
+    expect(body.monthlyBreakdown[1].month).toBe("2026-04");
+    expect(body.monthlyBreakdown[2].month).toBe("2026-05");
   });
 
   it("passes correct userId to database query", async () => {
@@ -163,7 +163,7 @@ describe("GET /api/analytics/revenue - range parameter handling", () => {
       { amount: 5000, status: "paid", paidDate: "2020-01-15", dueDate: null, currency: "USD" },
     ]);
 
-    const response = await GET(makeRequest("http://localhost:3000/api/analytics/revenue"));
+    const response = await GET(makeRequest("http://localhost:3000/api/analytics/revenue?range=this_year"));
     const body = await response.json();
 
     expect(response.status).toBe(200);
@@ -204,7 +204,7 @@ describe("GET /api/analytics/revenue - range parameter handling", () => {
 
   it("filters payments by date range", async () => {
     (getPaymentsByUserId as ReturnType<typeof vi.fn>).mockResolvedValue([
-      { amount: 5000, status: "paid", paidDate: "2025-01-15", dueDate: null, currency: "USD" },
+      { amount: 5000, status: "paid", paidDate: "2026-05-15", dueDate: null, currency: "USD" },
       { amount: 7000, status: "paid", paidDate: "2020-06-15", dueDate: null, currency: "USD" },
     ]);
 
@@ -218,10 +218,10 @@ describe("GET /api/analytics/revenue - range parameter handling", () => {
 describe("GET /api/analytics/revenue - edge cases", () => {
   it("handles null currency field", async () => {
     (getPaymentsByUserId as ReturnType<typeof vi.fn>).mockResolvedValue([
-      { amount: 5000, status: "paid", paidDate: "2025-03-15", dueDate: null, currency: null },
+      { amount: 5000, status: "paid", paidDate: "2026-05-15", dueDate: null, currency: null },
     ]);
 
-    const response = await GET(makeRequest("http://localhost:3000/api/analytics/revenue"));
+    const response = await GET(makeRequest("http://localhost:3000/api/analytics/revenue?range=30d"));
     const body = await response.json();
 
     expect(response.status).toBe(200);
@@ -230,23 +230,23 @@ describe("GET /api/analytics/revenue - edge cases", () => {
 
   it("handles missing currency field", async () => {
     (getPaymentsByUserId as ReturnType<typeof vi.fn>).mockResolvedValue([
-      { amount: 5000, status: "paid", paidDate: "2025-03-15", dueDate: null },
+      { amount: 5000, status: "paid", paidDate: "2026-05-15", dueDate: null },
     ]);
 
-    const response = await GET(makeRequest("http://localhost:3000/api/analytics/revenue"));
+    const response = await GET(makeRequest("http://localhost:3000/api/analytics/revenue?range=30d"));
 
     expect(response.status).toBe(200);
   });
 
   it("handles mix of paid, pending, and overdue payments", async () => {
     (getPaymentsByUserId as ReturnType<typeof vi.fn>).mockResolvedValue([
-      { amount: 5000, status: "paid", paidDate: "2025-03-15", dueDate: null, currency: "USD" },
-      { amount: 3000, status: "pending", paidDate: null, dueDate: "2025-06-01", currency: "USD" },
+      { amount: 5000, status: "paid", paidDate: "2026-05-15", dueDate: null, currency: "USD" },
+      { amount: 3000, status: "pending", paidDate: null, dueDate: "2026-06-01", currency: "USD" },
       { amount: 2000, status: "overdue", paidDate: null, dueDate: "2020-01-01", currency: "USD" },
       { amount: 1000, status: "paid", paidDate: null, dueDate: null, currency: "USD" },
     ]);
 
-    const response = await GET(makeRequest("http://localhost:3000/api/analytics/revenue"));
+    const response = await GET(makeRequest("http://localhost:3000/api/analytics/revenue?range=30d"));
     const body = await response.json();
 
     expect(body.totalRevenue).toBe(5000);
@@ -257,11 +257,11 @@ describe("GET /api/analytics/revenue - edge cases", () => {
 
   it("handles large amounts without overflow", async () => {
     (getPaymentsByUserId as ReturnType<typeof vi.fn>).mockResolvedValue([
-      { amount: 999999999, status: "paid", paidDate: "2025-03-15", dueDate: null, currency: "USD" },
-      { amount: 999999999, status: "paid", paidDate: "2025-03-20", dueDate: null, currency: "USD" },
+      { amount: 999999999, status: "paid", paidDate: "2026-05-15", dueDate: null, currency: "USD" },
+      { amount: 999999999, status: "paid", paidDate: "2026-05-10", dueDate: null, currency: "USD" },
     ]);
 
-    const response = await GET(makeRequest("http://localhost:3000/api/analytics/revenue"));
+    const response = await GET(makeRequest("http://localhost:3000/api/analytics/revenue?range=30d"));
     const body = await response.json();
 
     expect(body.totalRevenue).toBe(1999999998);
@@ -270,10 +270,10 @@ describe("GET /api/analytics/revenue - edge cases", () => {
 
   it("handles zero-amount payments", async () => {
     (getPaymentsByUserId as ReturnType<typeof vi.fn>).mockResolvedValue([
-      { amount: 0, status: "paid", paidDate: "2025-03-15", dueDate: null, currency: "USD" },
+      { amount: 0, status: "paid", paidDate: "2026-05-15", dueDate: null, currency: "USD" },
     ]);
 
-    const response = await GET(makeRequest("http://localhost:3000/api/analytics/revenue"));
+    const response = await GET(makeRequest("http://localhost:3000/api/analytics/revenue?range=30d"));
     const body = await response.json();
 
     expect(body.totalRevenue).toBe(0);

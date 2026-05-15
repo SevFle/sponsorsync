@@ -40,8 +40,10 @@ vi.mock("@/components/dashboard/TrendLineChart", () => ({
 }));
 
 vi.mock("@/components/dashboard/MetricCardEnhanced", () => ({
-  MetricCardEnhanced: ({ label, value }: { label: string; value: unknown }) => (
-    <div data-testid={`metric-${label.toLowerCase().replace(/\s+/g, "-")}`} data-value={String(value)} />
+  MetricCardEnhanced: ({ label, value, subtitle }: { label: string; value: unknown; subtitle?: string }) => (
+    <div data-testid={`metric-${label.toLowerCase().replace(/\s+/g, "-")}`} data-value={String(value)}>
+      {subtitle && <span data-testid={`subtitle-${label.toLowerCase().replace(/\s+/g, "-")}`}>{subtitle}</span>}
+    </div>
   ),
 }));
 
@@ -426,8 +428,10 @@ describe("AnalyticsPage - overdue display", () => {
     await renderPage();
 
     await waitFor(() => {
-      expect(screen.getByText("needs attention")).toBeInTheDocument();
+      expect(screen.getByTestId("subtitle-overdue-items")).toBeInTheDocument();
     });
+
+    expect(screen.getByTestId("subtitle-overdue-items").textContent).toBe("needs attention");
   });
 
   it("shows all on track when overdueCount is 0", async () => {
@@ -443,7 +447,9 @@ describe("AnalyticsPage - overdue display", () => {
     await renderPage();
 
     await waitFor(() => {
-      expect(screen.getByText("all on track")).toBeInTheDocument();
+      expect(screen.getByTestId("subtitle-overdue-items")).toBeInTheDocument();
     });
+
+    expect(screen.getByTestId("subtitle-overdue-items").textContent).toBe("all on track");
   });
 });

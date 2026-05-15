@@ -81,11 +81,11 @@ describe("GET /api/analytics/deliverables - successful responses", () => {
 
   it("computes status counts correctly", async () => {
     (getDeliverablesByUserId as ReturnType<typeof vi.fn>).mockResolvedValue([
-      { status: "pending", dueDate: "2025-06-01", completedDate: null },
-      { status: "in_progress", dueDate: "2025-06-15", completedDate: null },
-      { status: "submitted", dueDate: "2025-06-01", completedDate: null },
-      { status: "verified", dueDate: "2025-06-01", completedDate: "2025-05-28" },
-      { status: "missed", dueDate: "2025-05-01", completedDate: null },
+      { status: "pending", dueDate: "2026-06-01", completedDate: null },
+      { status: "in_progress", dueDate: "2026-06-15", completedDate: null },
+      { status: "submitted", dueDate: "2026-07-01", completedDate: null },
+      { status: "verified", dueDate: "2026-05-01", completedDate: "2026-04-28" },
+      { status: "missed", dueDate: "2026-04-01", completedDate: null },
     ]);
 
     const response = await GET(makeRequest("http://localhost:3000/api/analytics/deliverables?range=this_year"));
@@ -102,10 +102,10 @@ describe("GET /api/analytics/deliverables - successful responses", () => {
 
   it("computes completion rate", async () => {
     (getDeliverablesByUserId as ReturnType<typeof vi.fn>).mockResolvedValue([
-      { status: "verified", dueDate: "2025-06-01", completedDate: "2025-05-28" },
-      { status: "verified", dueDate: "2025-06-15", completedDate: "2025-06-10" },
-      { status: "pending", dueDate: "2025-07-01", completedDate: null },
-      { status: "in_progress", dueDate: "2025-07-15", completedDate: null },
+      { status: "verified", dueDate: "2026-06-01", completedDate: "2026-05-28" },
+      { status: "verified", dueDate: "2026-07-15", completedDate: "2026-07-10" },
+      { status: "pending", dueDate: "2026-08-01", completedDate: null },
+      { status: "in_progress", dueDate: "2026-09-15", completedDate: null },
     ]);
 
     const response = await GET(makeRequest("http://localhost:3000/api/analytics/deliverables?range=this_year"));
@@ -117,8 +117,8 @@ describe("GET /api/analytics/deliverables - successful responses", () => {
 
   it("computes on-time rate for verified deliverables", async () => {
     (getDeliverablesByUserId as ReturnType<typeof vi.fn>).mockResolvedValue([
-      { status: "verified", dueDate: "2025-06-01", completedDate: "2025-05-28" },
-      { status: "verified", dueDate: "2025-06-15", completedDate: "2025-06-20" },
+      { status: "verified", dueDate: "2026-06-01", completedDate: "2026-05-28" },
+      { status: "verified", dueDate: "2026-06-15", completedDate: "2026-06-20" },
     ]);
 
     const response = await GET(makeRequest("http://localhost:3000/api/analytics/deliverables?range=this_year"));
@@ -129,11 +129,11 @@ describe("GET /api/analytics/deliverables - successful responses", () => {
 
   it("computes overdue count for non-verified deliverables past due", async () => {
     (getDeliverablesByUserId as ReturnType<typeof vi.fn>).mockResolvedValue([
-      { status: "pending", dueDate: "2020-01-01", completedDate: null },
-      { status: "in_progress", dueDate: "2020-01-15", completedDate: null },
-      { status: "submitted", dueDate: "2020-02-01", completedDate: null },
-      { status: "verified", dueDate: "2020-01-01", completedDate: "2020-01-01" },
-      { status: "missed", dueDate: "2020-01-01", completedDate: null },
+      { status: "pending", dueDate: "2026-01-01", completedDate: null },
+      { status: "in_progress", dueDate: "2026-01-15", completedDate: null },
+      { status: "submitted", dueDate: "2026-02-01", completedDate: null },
+      { status: "verified", dueDate: "2026-03-01", completedDate: "2026-03-01" },
+      { status: "missed", dueDate: "2026-04-01", completedDate: null },
     ]);
 
     const response = await GET(makeRequest("http://localhost:3000/api/analytics/deliverables?range=this_year"));
@@ -205,7 +205,7 @@ describe("GET /api/analytics/deliverables - edge cases", () => {
 
   it("handles deliverables with null completedDate", async () => {
     (getDeliverablesByUserId as ReturnType<typeof vi.fn>).mockResolvedValue([
-      { status: "verified", dueDate: "2025-06-01", completedDate: null },
+      { status: "verified", dueDate: "2026-06-01", completedDate: null },
     ]);
 
     const response = await GET(makeRequest("http://localhost:3000/api/analytics/deliverables?range=this_year"));
@@ -218,9 +218,9 @@ describe("GET /api/analytics/deliverables - edge cases", () => {
 
   it("handles all verified deliverables", async () => {
     (getDeliverablesByUserId as ReturnType<typeof vi.fn>).mockResolvedValue([
-      { status: "verified", dueDate: "2025-06-01", completedDate: "2025-05-28" },
-      { status: "verified", dueDate: "2025-06-15", completedDate: "2025-06-10" },
-      { status: "verified", dueDate: "2025-07-01", completedDate: "2025-06-30" },
+      { status: "verified", dueDate: "2026-04-01", completedDate: "2026-03-28" },
+      { status: "verified", dueDate: "2026-05-15", completedDate: "2026-05-10" },
+      { status: "verified", dueDate: "2026-06-01", completedDate: "2026-05-30" },
     ]);
 
     const response = await GET(makeRequest("http://localhost:3000/api/analytics/deliverables?range=this_year"));
@@ -233,8 +233,8 @@ describe("GET /api/analytics/deliverables - edge cases", () => {
 
   it("handles all missed deliverables", async () => {
     (getDeliverablesByUserId as ReturnType<typeof vi.fn>).mockResolvedValue([
-      { status: "missed", dueDate: "2025-06-01", completedDate: null },
-      { status: "missed", dueDate: "2025-06-15", completedDate: null },
+      { status: "missed", dueDate: "2026-04-01", completedDate: null },
+      { status: "missed", dueDate: "2026-05-15", completedDate: null },
     ]);
 
     const response = await GET(makeRequest("http://localhost:3000/api/analytics/deliverables?range=this_year"));
@@ -247,7 +247,7 @@ describe("GET /api/analytics/deliverables - edge cases", () => {
 
   it("handles unknown status (not counted in status counts)", async () => {
     (getDeliverablesByUserId as ReturnType<typeof vi.fn>).mockResolvedValue([
-      { status: "unknown_status", dueDate: "2025-06-01", completedDate: null },
+      { status: "unknown_status", dueDate: "2026-06-01", completedDate: null },
     ]);
 
     const response = await GET(makeRequest("http://localhost:3000/api/analytics/deliverables?range=this_year"));
