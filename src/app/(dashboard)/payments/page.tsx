@@ -1,8 +1,6 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { useSession } from "next-auth/react";
-import { useRouter } from "next/navigation";
 import { format } from "date-fns";
 import { PageHeader } from "@/components/ui/page-header";
 import { PaymentStatusBadge, type PaymentStatus } from "@/components/ui/status-badge";
@@ -10,6 +8,7 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { Skeleton } from "@/components/ui/skeleton";
 import { apiFetch } from "@/lib/api-client";
 import { cn } from "@/lib/utils";
+import { useAuth } from "@/hooks/use-auth";
 
 type FilterTab = "all" | PaymentStatus;
 
@@ -344,8 +343,7 @@ function RecordPaymentModal({
 }
 
 export default function PaymentsPage() {
-  const { status: sessionStatus } = useSession();
-  const router = useRouter();
+  const { isAuthenticated } = useAuth();
 
   const [payments, setPayments] = useState<Payment[]>([]);
   const [deals, setDeals] = useState<DealOption[]>([]);
@@ -385,16 +383,12 @@ export default function PaymentsPage() {
   }, []);
 
   useEffect(() => {
-    if (sessionStatus === "unauthenticated") {
-      router.replace("/login");
-      return;
-    }
-    if (sessionStatus !== "authenticated") return;
+    if (!isAuthenticated) return;
 
     const controller = new AbortController();
     fetchData(controller.signal);
     return () => controller.abort();
-  }, [fetchData, sessionStatus, router]);
+  }, [fetchData, isAuthenticated]);
 
   const filteredPayments = payments.filter((payment) => {
     const matchesTab = activeTab === "all" || payment.status === activeTab;
@@ -445,7 +439,7 @@ export default function PaymentsPage() {
     }
   }, [fetchData]);
 
-  if (sessionStatus !== "authenticated") {
+  if (!isAuthenticated) {
     return null;
   }
 
