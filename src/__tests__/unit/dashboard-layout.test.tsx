@@ -174,7 +174,7 @@ describe("DashboardLayout - rendering when authenticated", () => {
 
     const { container } = render(result as React.ReactElement);
     const links = container.querySelectorAll("a");
-    expect(links.length).toBe(9);
+    expect(links.length).toBe(10);
   });
 
   it("renders children in main element", async () => {

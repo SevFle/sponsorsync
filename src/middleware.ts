@@ -1,5 +1,12 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
+import {
+  CSRF_COOKIE_NAME,
+  CSRF_HEADER_NAME,
+  generateCsrfToken,
+  validateCsrfToken,
+  isMutatingMethod,
+} from "@/lib/security/csrf";
 
 const PUBLIC_PATHS = [
   "/login",
@@ -28,6 +35,15 @@ function getSessionToken(request: NextRequest): string | undefined {
   );
 }
 
+function setCsrfCookie(response: NextResponse, token: string): void {
+  response.cookies.set(CSRF_COOKIE_NAME, token, {
+    httpOnly: false,
+    sameSite: "lax",
+    secure: process.env.NODE_ENV === "production",
+    path: "/",
+  });
+}
+
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
@@ -36,6 +52,14 @@ export function middleware(request: NextRequest) {
   }
 
   if (pathname.startsWith("/api/")) {
+    if (isMutatingMethod(request.method)) {
+      const cookieToken = request.cookies.get(CSRF_COOKIE_NAME)?.value;
+      const headerToken = request.headers.get(CSRF_HEADER_NAME) ?? undefined;
+
+      if (!validateCsrfToken(cookieToken, headerToken)) {
+        return NextResponse.json({ error: "CSRF token validation failed" }, { status: 403 });
+      }
+    }
     return NextResponse.next();
   }
 
@@ -48,10 +72,20 @@ export function middleware(request: NextRequest) {
   }
 
   if (isSubscriptionAllowedPath(pathname)) {
-    return NextResponse.next();
+    const response = NextResponse.next();
+    const existingCsrf = request.cookies.get(CSRF_COOKIE_NAME)?.value;
+    if (!existingCsrf) {
+      setCsrfCookie(response, generateCsrfToken());
+    }
+    return response;
   }
 
-  return NextResponse.next();
+  const response = NextResponse.next();
+  const existingCsrf = request.cookies.get(CSRF_COOKIE_NAME)?.value;
+  if (!existingCsrf) {
+    setCsrfCookie(response, generateCsrfToken());
+  }
+  return response;
 }
 
 export const config = {

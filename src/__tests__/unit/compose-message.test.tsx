@@ -2,6 +2,10 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, waitFor, fireEvent } from "@testing-library/react";
 import { ComposeMessage } from "@/components/communications/ComposeMessage";
 
+vi.mock("@/lib/auth/redirect", () => ({
+  redirectToLogin: vi.fn(),
+}));
+
 const mockContacts = [
   { id: "contact-1", name: "Jane Doe", email: "jane@test.com", isPrimary: true },
   { id: "contact-2", name: "John Smith", email: "john@test.com", isPrimary: false },

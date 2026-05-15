@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect } from "vitest";
 import { middleware } from "@/middleware";
 
 function createMockRequest(
@@ -6,6 +6,8 @@ function createMockRequest(
   options?: {
     cookies?: Record<string, string>;
     searchParams?: Record<string, string>;
+    method?: string;
+    headers?: Record<string, string>;
   }
 ) {
   const cookies = new Map<string, { name: string; value: string }>();
@@ -22,11 +24,22 @@ function createMockRequest(
     }
   }
 
+  const headers = new Map<string, string>();
+  if (options?.headers) {
+    for (const [name, value] of Object.entries(options.headers)) {
+      headers.set(name, value);
+    }
+  }
+
   return {
     nextUrl: { pathname, searchParams: url.searchParams },
     url: url.toString(),
+    method: options?.method ?? "GET",
     cookies: {
       get: (name: string) => cookies.get(name) ?? undefined,
+    },
+    headers: {
+      get: (name: string) => headers.get(name) ?? null,
     },
   } as any;
 }
@@ -51,13 +64,13 @@ describe("middleware - public routes", () => {
   });
 
   it("allows /api/webhooks/stripe without session token", () => {
-    const req = createMockRequest("/api/webhooks/stripe");
+    const req = createMockRequest("/api/webhooks/stripe", { method: "POST" });
     const response = middleware(req);
     expect(response.status).toBe(200);
   });
 
   it("allows /api/webhooks/inngest without session token", () => {
-    const req = createMockRequest("/api/webhooks/inngest");
+    const req = createMockRequest("/api/webhooks/inngest", { method: "POST" });
     const response = middleware(req);
     expect(response.status).toBe(200);
   });
@@ -76,7 +89,7 @@ describe("middleware - public routes", () => {
       "/api/webhooks/",
     ];
     for (const path of paths) {
-      const req = createMockRequest(path);
+      const req = createMockRequest(path, { method: "POST" });
       const response = middleware(req);
       expect(response.status).toBe(200);
     }
@@ -84,44 +97,44 @@ describe("middleware - public routes", () => {
 });
 
 describe("middleware - API routes (handled by route handlers)", () => {
-  it("allows /api/deals without session token (route handles auth)", () => {
-    const req = createMockRequest("/api/deals");
+  it("allows /api/deals GET without session token (route handles auth)", () => {
+    const req = createMockRequest("/api/deals", { method: "GET" });
     const response = middleware(req);
     expect(response.status).toBe(200);
   });
 
-  it("allows /api/dashboard without session token (route handles auth)", () => {
-    const req = createMockRequest("/api/dashboard");
+  it("allows /api/dashboard GET without session token (route handles auth)", () => {
+    const req = createMockRequest("/api/dashboard", { method: "GET" });
     const response = middleware(req);
     expect(response.status).toBe(200);
   });
 
-  it("allows /api/sponsors without session token", () => {
-    const req = createMockRequest("/api/sponsors");
+  it("allows /api/sponsors GET without session token", () => {
+    const req = createMockRequest("/api/sponsors", { method: "GET" });
     const response = middleware(req);
     expect(response.status).toBe(200);
   });
 
-  it("allows /api/payments without session token", () => {
-    const req = createMockRequest("/api/payments");
+  it("allows /api/payments GET without session token", () => {
+    const req = createMockRequest("/api/payments", { method: "GET" });
     const response = middleware(req);
     expect(response.status).toBe(200);
   });
 
-  it("allows /api/deliverables without session token", () => {
-    const req = createMockRequest("/api/deliverables");
+  it("allows /api/deliverables GET without session token", () => {
+    const req = createMockRequest("/api/deliverables", { method: "GET" });
     const response = middleware(req);
     expect(response.status).toBe(200);
   });
 
-  it("allows /api/integrations without session token", () => {
-    const req = createMockRequest("/api/integrations");
+  it("allows /api/integrations GET without session token", () => {
+    const req = createMockRequest("/api/integrations", { method: "GET" });
     const response = middleware(req);
     expect(response.status).toBe(200);
   });
 
-  it("allows /api/templates without session token", () => {
-    const req = createMockRequest("/api/templates");
+  it("allows /api/templates GET without session token", () => {
+    const req = createMockRequest("/api/templates", { method: "GET" });
     const response = middleware(req);
     expect(response.status).toBe(200);
   });
@@ -319,7 +332,9 @@ describe("middleware - edge cases", () => {
   });
 
   it("handles paths with query parameters", () => {
-    const req = createMockRequest("/dashboard/deals?page=2&status=active");
+    const req = createMockRequest("/dashboard/deals", {
+      searchParams: { page: "2", status: "active" },
+    });
     const response = middleware(req);
     expect(response.status).toBe(307);
   });

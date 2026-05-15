@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
+import { apiFetch, ApiError } from "@/lib/api-client";
 
 interface TemplateOption {
   id: string;
@@ -43,9 +44,7 @@ export function ComposeMessage({
   useEffect(() => {
     async function loadTemplates() {
       try {
-        const res = await fetch("/api/templates");
-        if (!res.ok) return;
-        const data = await res.json();
+        const data = await apiFetch<{ templates?: TemplateOption[] }>("/api/templates");
         setTemplates(data.templates ?? []);
       } catch {
         // ignore
@@ -58,18 +57,19 @@ export function ComposeMessage({
     if (!selectedTemplateId) return;
     setLoadingPreview(true);
     try {
-      const res = await fetch(`/api/sponsors/${sponsorId}/send`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          templateId: selectedTemplateId,
-          contactId: selectedContactId || undefined,
-          to: !selectedContactId && customTo ? customTo : undefined,
-          sponsorId,
-          preview: true,
-        }),
-      });
-      const data = await res.json();
+      const data = await apiFetch<{ preview?: { html: string; subject: string } }>(
+        `/api/sponsors/${sponsorId}/send`,
+        {
+          method: "POST",
+          body: JSON.stringify({
+            templateId: selectedTemplateId,
+            contactId: selectedContactId || undefined,
+            to: !selectedContactId && customTo ? customTo : undefined,
+            sponsorId,
+            preview: true,
+          }),
+        }
+      );
       if (data.preview) {
         setPreview({ html: data.preview.html, subject: data.preview.subject });
       }
@@ -94,26 +94,27 @@ export function ComposeMessage({
     setError(null);
 
     try {
-      const res = await fetch(`/api/sponsors/${sponsorId}/send`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          templateId: selectedTemplateId,
-          contactId: selectedContactId || undefined,
-          to: !selectedContactId && customTo ? customTo : undefined,
-          sponsorId,
-        }),
-      });
+      const data = await apiFetch<{ id?: string; error?: string }>(
+        `/api/sponsors/${sponsorId}/send`,
+        {
+          method: "POST",
+          body: JSON.stringify({
+            templateId: selectedTemplateId,
+            contactId: selectedContactId || undefined,
+            to: !selectedContactId && customTo ? customTo : undefined,
+            sponsorId,
+          }),
+        }
+      );
 
-      const data = await res.json();
-      if (!res.ok) {
-        setError(data.error ?? "Failed to send");
+      if (data.error) {
+        setError(data.error);
         return;
       }
 
       onSent();
-    } catch {
-      setError("Failed to send email. Please try again.");
+    } catch (e) {
+      setError(e instanceof ApiError ? e.message : "Failed to send email. Please try again.");
     } finally {
       setSending(false);
     }
