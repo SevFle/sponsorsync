@@ -128,8 +128,7 @@ describe("getTieredDeadlineAlerts", () => {
   });
 
   it("returns alert for 1-day tier", () => {
-    const tomorrow = new Date();
-    tomorrow.setDate(tomorrow.getDate() + 1);
+    const tomorrow = new Date(Date.now() + 25 * 60 * 60 * 1000);
 
     const result = getTieredDeadlineAlerts(
       [{ id: "d1", title: "Ad", dueDate: tomorrow.toISOString(), status: "pending", dealId: "deal-1", dealTitle: "Sponsor" }],
