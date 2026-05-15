@@ -1,8 +1,9 @@
 import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth/config";
-import { getPaymentsByUserId } from "@/lib/db/queries/payments";
+import { getPaymentsByUserId, createPayment } from "@/lib/db/queries/payments";
 import { getDealsByUserId } from "@/lib/db/queries/deals";
+import { getDealById } from "@/lib/db/queries/deals";
 import { getSponsorsByUserId } from "@/lib/db/queries/sponsors";
 import { createPaymentSchema } from "@/domain/payments";
 
@@ -78,5 +79,29 @@ export async function POST(request: Request) {
     );
   }
 
-  return NextResponse.json({ payment: parsed.data }, { status: 201 });
+  try {
+    const userId = session.user.id;
+    const deal = await getDealById(parsed.data.dealId, userId);
+    if (!deal) {
+      return NextResponse.json(
+        { error: "Deal not found or access denied" },
+        { status: 404 }
+      );
+    }
+
+    const payment = await createPayment({
+      dealId: parsed.data.dealId,
+      amount: parsed.data.amount,
+      currency: parsed.data.currency ?? "USD",
+      dueDate: parsed.data.dueDate ?? null,
+      status: "pending",
+    });
+
+    return NextResponse.json({ payment }, { status: 201 });
+  } catch {
+    return NextResponse.json(
+      { error: "Failed to create payment" },
+      { status: 500 }
+    );
+  }
 }

@@ -9,6 +9,36 @@ vi.mock("@/lib/auth/config", () => ({
   authOptions: {},
 }));
 
+vi.mock("@/lib/db/queries/deliverables", () => ({
+  getDeliverablesByUserId: vi.fn().mockResolvedValue([]),
+}));
+
+vi.mock("@/lib/db/queries/deals", () => ({
+  getDealsByUserId: vi.fn().mockResolvedValue([]),
+}));
+
+vi.mock("@/lib/db/queries/sponsors", () => ({
+  getSponsorsByUserId: vi.fn().mockResolvedValue([]),
+}));
+
+vi.mock("@/lib/deliverables/engine", () => ({
+  computeDeadlineStatus: vi.fn().mockReturnValue("no_deadline"),
+}));
+
+vi.mock("@/lib/analytics", () => ({
+  computeDeliverableMetrics: vi.fn().mockReturnValue({
+    total: 0,
+    completionRate: 0,
+    onTimeRate: 0,
+    overdueCount: 0,
+    verifiedCount: 0,
+    statusCounts: { pending: 0, in_progress: 0, submitted: 0, verified: 0, missed: 0 },
+  }),
+  computeStatusCounts: vi.fn().mockReturnValue({
+    pending: 0, in_progress: 0, submitted: 0, verified: 0, missed: 0,
+  }),
+}));
+
 import { getServerSession } from "next-auth";
 
 const mockSession = { user: { id: "user-1", email: "test@test.com" } };
@@ -31,12 +61,14 @@ describe("GET /api/deliverables", () => {
     expect(body.error).toBe("Unauthorized");
   });
 
-  it("returns empty deliverables array", async () => {
+  it("returns empty deliverables array with metrics", async () => {
     const response = await GET();
     const body = await response.json();
 
     expect(response.status).toBe(200);
-    expect(body).toEqual({ deliverables: [] });
+    expect(body.deliverables).toEqual([]);
+    expect(body).toHaveProperty("metrics");
+    expect(body.metrics.total).toBe(0);
   });
 });
 

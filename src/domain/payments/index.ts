@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { differenceInDays } from "date-fns";
 
 export const createPaymentSchema = z.object({
   dealId: z.string().uuid(),
@@ -33,4 +34,40 @@ export function calculateTotalOutstanding(
   return payments
     .filter((p) => p.status === "pending" || p.status === "overdue")
     .reduce((sum, p) => sum + p.amount, 0);
+}
+
+export function calculateTotalOverdue(
+  payments: { amount: number; status: string }[]
+): number {
+  return payments
+    .filter((p) => p.status === "overdue")
+    .reduce((sum, p) => sum + p.amount, 0);
+}
+
+export function calculateTotalPending(
+  payments: { amount: number; status: string }[]
+): number {
+  return payments
+    .filter((p) => p.status === "pending")
+    .reduce((sum, p) => sum + p.amount, 0);
+}
+
+export type DueDateStatus = "overdue" | "due_soon" | "upcoming" | "no_due_date" | "paid";
+
+export function getDaysUntilDue(dueDate: string | null): number | null {
+  if (!dueDate) return null;
+  return differenceInDays(new Date(dueDate), new Date());
+}
+
+export function getDueDateStatus(
+  dueDate: string | null,
+  status: string
+): DueDateStatus {
+  if (status === "paid" || status === "cancelled") return "paid";
+  if (!dueDate) return "no_due_date";
+
+  const days = differenceInDays(new Date(dueDate), new Date());
+  if (days < 0) return "overdue";
+  if (days <= 7) return "due_soon";
+  return "upcoming";
 }
