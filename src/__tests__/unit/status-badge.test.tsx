@@ -2,11 +2,12 @@ import { describe, it, expect } from "vitest";
 import { render, screen } from "@testing-library/react";
 import { StatusBadge, type DealStatus } from "@/components/ui/status-badge";
 
-const statuses: DealStatus[] = ["active", "draft", "completed", "cancelled"];
+const statuses: DealStatus[] = ["active", "draft", "proposed", "completed", "cancelled"];
 
 const expectedLabels: Record<DealStatus, string> = {
   active: "Active",
   draft: "Draft",
+  proposed: "Proposed",
   completed: "Completed",
   cancelled: "Cancelled",
 };
@@ -38,6 +39,13 @@ describe("StatusBadge", () => {
     const badge = container.firstChild as HTMLElement;
     expect(badge.className).toContain("bg-slate-100");
     expect(badge.className).toContain("text-slate-500");
+  });
+
+  it("applies blue classes for proposed status", () => {
+    const { container } = render(<StatusBadge status="proposed" />);
+    const badge = container.firstChild as HTMLElement;
+    expect(badge.className).toContain("bg-blue-100");
+    expect(badge.className).toContain("text-blue-700");
   });
 
   it("applies gray classes for cancelled status", () => {

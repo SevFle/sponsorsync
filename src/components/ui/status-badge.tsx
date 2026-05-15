@@ -1,15 +1,19 @@
 import { cn } from "@/lib/utils";
 
-export type DealStatus = "draft" | "active" | "completed" | "cancelled";
+export type DealStatus = "draft" | "proposed" | "active" | "completed" | "cancelled";
 
 const statusConfig: Record<DealStatus, { label: string; className: string }> = {
-  active: {
-    label: "Active",
-    className: "bg-green-100 text-green-700",
-  },
   draft: {
     label: "Draft",
     className: "bg-amber-100 text-amber-700",
+  },
+  proposed: {
+    label: "Proposed",
+    className: "bg-blue-100 text-blue-700",
+  },
+  active: {
+    label: "Active",
+    className: "bg-green-100 text-green-700",
   },
   completed: {
     label: "Completed",

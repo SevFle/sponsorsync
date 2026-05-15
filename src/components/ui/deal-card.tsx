@@ -57,8 +57,9 @@ function DeadlineIndicator({ endDate }: { endDate: string | null }) {
 }
 
 const progressBarColors: Record<DealStatus, string> = {
-  active: "bg-green-500",
   draft: "bg-amber-500",
+  proposed: "bg-blue-500",
+  active: "bg-green-500",
   completed: "bg-slate-400",
   cancelled: "bg-gray-300",
 };

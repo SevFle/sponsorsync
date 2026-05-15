@@ -1,6 +1,6 @@
 import { pgTable, uuid, text, timestamp, boolean, integer, pgEnum, varchar, date, jsonb } from "drizzle-orm/pg-core";
 
-export const dealStatusEnum = pgEnum("deal_status", ["draft", "active", "completed", "cancelled"]);
+export const dealStatusEnum = pgEnum("deal_status", ["draft", "proposed", "active", "completed", "cancelled"]);
 export const deliverableStatusEnum = pgEnum("deliverable_status", ["pending", "in_progress", "submitted", "verified", "missed"]);
 export const paymentStatusEnum = pgEnum("payment_status", ["pending", "paid", "overdue", "cancelled"]);
 export const integrationPlatformEnum = pgEnum("integration_platform", ["buzzsprout", "transistor", "anchor", "convertkit", "mailchimp"]);

@@ -1,6 +1,7 @@
 import { db } from "..";
 import { deals } from "../schema";
 import { eq, and } from "drizzle-orm";
+import type { dealStatusEnum } from "../schema";
 
 export async function getDealsByUserId(userId: string) {
   return db.select().from(deals).where(eq(deals.userId, userId));
@@ -25,6 +26,15 @@ export async function createDeal(data: typeof deals.$inferInsert) {
 
 export async function updateDeal(id: string, data: Partial<typeof deals.$inferInsert>, userId: string) {
   const [deal] = await db.update(deals).set(data).where(and(eq(deals.id, id), eq(deals.userId, userId))).returning();
+  return deal;
+}
+
+export async function updateDealStatus(id: string, status: typeof dealStatusEnum.enumValues[number], userId: string) {
+  const [deal] = await db
+    .update(deals)
+    .set({ status, updatedAt: new Date() })
+    .where(and(eq(deals.id, id), eq(deals.userId, userId)))
+    .returning();
   return deal;
 }
 

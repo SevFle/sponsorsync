@@ -9,7 +9,7 @@ import { apiFetch } from "@/lib/api-client";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/hooks/use-auth";
 
-type FilterTab = "all" | "active" | "draft" | "completed" | "cancelled";
+type FilterTab = "all" | "active" | "draft" | "proposed" | "completed" | "cancelled";
 
 type SortOption =
   | "endDate-asc"
@@ -28,6 +28,7 @@ const tabs: { key: FilterTab; label: string }[] = [
   { key: "all", label: "All Deals" },
   { key: "active", label: "Active" },
   { key: "draft", label: "Draft" },
+  { key: "proposed", label: "Proposed" },
   { key: "completed", label: "Completed" },
   { key: "cancelled", label: "Cancelled" },
 ];
@@ -128,12 +129,20 @@ export default function DealsPage() {
         title="Deals"
         description="Manage your sponsorship deals."
         action={
-          <a
-            href="/dashboard/deals/new"
-            className="inline-flex items-center rounded-md bg-black px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-gray-800"
-          >
-            New Deal
-          </a>
+          <div className="flex gap-2">
+            <a
+              href="/dashboard/deals/pipeline"
+              className="inline-flex items-center rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50"
+            >
+              Pipeline View
+            </a>
+            <a
+              href="/dashboard/deals/new"
+              className="inline-flex items-center rounded-md bg-black px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-gray-800"
+            >
+              New Deal
+            </a>
+          </div>
         }
       />
 

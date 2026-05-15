@@ -20,6 +20,7 @@ export default async function DashboardLayout({
           <ul className="space-y-2 text-sm">
             <li><a href="/dashboard" className="block rounded px-3 py-2 hover:bg-gray-200">Dashboard</a></li>
             <li><a href="/dashboard/deals" className="block rounded px-3 py-2 hover:bg-gray-200">Deals</a></li>
+            <li><a href="/dashboard/deals/pipeline" className="block rounded px-3 py-2 hover:bg-gray-200">Pipeline</a></li>
             <li><a href="/dashboard/sponsors" className="block rounded px-3 py-2 hover:bg-gray-200">Sponsors</a></li>
             <li><a href="/dashboard/deliverables" className="block rounded px-3 py-2 hover:bg-gray-200">Deliverables</a></li>
             <li><a href="/dashboard/payments" className="block rounded px-3 py-2 hover:bg-gray-200">Payments</a></li>
