@@ -5,8 +5,18 @@ vi.mock("@/lib/auth/guard", () => ({
   requireAuth: vi.fn(),
 }));
 
-vi.mock("@/lib/api-client", () => ({
-  apiFetch: vi.fn(),
+const mockGet = vi.fn();
+const mockPost = vi.fn();
+const mockPut = vi.fn();
+const mockDelete = vi.fn();
+
+vi.mock("@/lib/auth/server-fetch", () => ({
+  createServerFetch: vi.fn(() => ({
+    get: mockGet,
+    post: mockPost,
+    put: mockPut,
+    delete: mockDelete,
+  })),
   ApiError: class ApiError extends Error {
     status: number;
     body: Record<string, unknown>;
@@ -20,7 +30,7 @@ vi.mock("@/lib/api-client", () => ({
 }));
 
 import { requireAuth } from "@/lib/auth/guard";
-import { apiFetch } from "@/lib/api-client";
+import { createServerFetch } from "@/lib/auth/server-fetch";
 
 const mockSession = { user: { id: "user-1", email: "test@test.com", name: "Test User" } };
 
@@ -155,7 +165,7 @@ function mockApiFetch(overrides: Partial<{
   const deals = overrides.deals ?? [];
   const deliverables = overrides.deliverables ?? [];
   const payments = overrides.payments ?? [];
-  (apiFetch as ReturnType<typeof vi.fn>).mockImplementation((url: string) => {
+  mockGet.mockImplementation((url: string) => {
     if (url === "/api/deals") return Promise.resolve({ deals });
     if (url === "/api/deliverables") return Promise.resolve({ deliverables });
     if (url === "/api/payments") return Promise.resolve({ payments });
@@ -192,7 +202,7 @@ describe("DashboardPage - server-side auth guard", () => {
     const { default: DashboardPage } = await import("@/app/(dashboard)/page");
 
     await expect(DashboardPage()).rejects.toThrow("NEXT_REDIRECT");
-    expect(apiFetch).not.toHaveBeenCalled();
+    expect(mockGet).not.toHaveBeenCalled();
   });
 });
 
@@ -203,9 +213,9 @@ describe("DashboardPage - server-side data fetching", () => {
 
     await DashboardPage();
 
-    expect(apiFetch).toHaveBeenCalledWith("/api/deals", expect.objectContaining({ method: "GET" }));
-    expect(apiFetch).toHaveBeenCalledWith("/api/deliverables", expect.objectContaining({ method: "GET" }));
-    expect(apiFetch).toHaveBeenCalledWith("/api/payments", expect.objectContaining({ method: "GET" }));
+    expect(mockGet).toHaveBeenCalledWith("/api/deals", expect.objectContaining({ method: "GET" }));
+    expect(mockGet).toHaveBeenCalledWith("/api/deliverables", expect.objectContaining({ method: "GET" }));
+    expect(mockGet).toHaveBeenCalledWith("/api/payments", expect.objectContaining({ method: "GET" }));
   });
 
   it("fetches all three data sources for authenticated user", async () => {
@@ -218,7 +228,7 @@ describe("DashboardPage - server-side data fetching", () => {
 
     await DashboardPage();
 
-    expect(apiFetch).toHaveBeenCalledTimes(3);
+    expect(mockGet).toHaveBeenCalledTimes(3);
   });
 
   it("makes all three API calls concurrently", async () => {
@@ -231,7 +241,7 @@ describe("DashboardPage - server-side data fetching", () => {
 
     await DashboardPage();
 
-    const calledUrls = (apiFetch as ReturnType<typeof vi.fn>).mock.calls.map(
+    const calledUrls = (mockGet as ReturnType<typeof vi.fn>).mock.calls.map(
       (call: any[]) => call[0]
     );
     expect(calledUrls).toContain("/api/deals");
@@ -414,7 +424,7 @@ describe("DashboardPage - empty states", () => {
 
 describe("DashboardPage - error propagation", () => {
   it("propagates errors from deals API call", async () => {
-    (apiFetch as ReturnType<typeof vi.fn>).mockImplementation((url: string) => {
+    (mockGet as ReturnType<typeof vi.fn>).mockImplementation((url: string) => {
       if (url === "/api/deals") return Promise.reject(new Error("Failed to fetch deals"));
       if (url === "/api/deliverables") return Promise.resolve({ deliverables: [] });
       if (url === "/api/payments") return Promise.resolve({ payments: [] });
@@ -426,7 +436,7 @@ describe("DashboardPage - error propagation", () => {
   });
 
   it("propagates errors from deliverables API call", async () => {
-    (apiFetch as ReturnType<typeof vi.fn>).mockImplementation((url: string) => {
+    (mockGet as ReturnType<typeof vi.fn>).mockImplementation((url: string) => {
       if (url === "/api/deals") return Promise.resolve({ deals: [] });
       if (url === "/api/deliverables") return Promise.reject(new Error("Failed to fetch deliverables"));
       if (url === "/api/payments") return Promise.resolve({ payments: [] });
@@ -438,7 +448,7 @@ describe("DashboardPage - error propagation", () => {
   });
 
   it("propagates errors from payments API call", async () => {
-    (apiFetch as ReturnType<typeof vi.fn>).mockImplementation((url: string) => {
+    (mockGet as ReturnType<typeof vi.fn>).mockImplementation((url: string) => {
       if (url === "/api/deals") return Promise.resolve({ deals: [] });
       if (url === "/api/deliverables") return Promise.resolve({ deliverables: [] });
       if (url === "/api/payments") return Promise.reject(new Error("Failed to fetch payments"));
@@ -632,7 +642,7 @@ describe("DashboardPage - session edge cases", () => {
 
     const result = await DashboardPage();
     expect(result).toBeDefined();
-    expect(apiFetch).toHaveBeenCalled();
+    expect(mockGet).toHaveBeenCalled();
   });
 
   it("calls requireAuth exactly once per render", async () => {
