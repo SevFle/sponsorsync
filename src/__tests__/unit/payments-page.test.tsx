@@ -161,14 +161,16 @@ afterEach(() => {
 });
 
 describe("PaymentsPage - useSession auth guard", () => {
-  it("redirects to /login when session is unauthenticated", async () => {
+  it("redirects to /login with callbackUrl when session is unauthenticated", async () => {
     mockUnauthenticatedSession();
     vi.spyOn(globalThis, "fetch").mockReturnValue(new Promise(() => {}));
 
     render(<PaymentsPage />);
 
     await waitFor(() => {
-      expect(mockRouter.replace).toHaveBeenCalledWith("/login");
+      expect(mockRouter.replace).toHaveBeenCalledWith(
+        expect.stringContaining("/login?callbackUrl=")
+      );
     });
   });
 
@@ -211,7 +213,9 @@ describe("PaymentsPage - useSession auth guard", () => {
     const { container } = render(<PaymentsPage />);
 
     await waitFor(() => {
-      expect(mockRouter.replace).toHaveBeenCalledWith("/login");
+      expect(mockRouter.replace).toHaveBeenCalledWith(
+        expect.stringContaining("/login?callbackUrl=")
+      );
     });
 
     expect(container.innerHTML).toBe("");

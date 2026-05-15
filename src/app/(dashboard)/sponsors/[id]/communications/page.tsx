@@ -77,7 +77,8 @@ export default function SponsorCommunicationsPage({
 
   useEffect(() => {
     if (sessionStatus === "unauthenticated") {
-      router.replace("/login");
+      const currentPath = window.location.pathname;
+      router.replace(`/login?callbackUrl=${encodeURIComponent(currentPath)}`);
       return;
     }
     if (sessionStatus !== "authenticated" || !sponsorId) return;

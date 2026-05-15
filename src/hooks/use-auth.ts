@@ -18,7 +18,10 @@ export function useAuth(options: UseAuthOptions = {}) {
 
   useEffect(() => {
     if (status === "unauthenticated") {
-      router.replace(redirectTo);
+      const currentPath = window.location.pathname;
+      router.replace(
+        `${redirectTo}?callbackUrl=${encodeURIComponent(currentPath)}`
+      );
     }
   }, [status, redirectTo, router]);
 

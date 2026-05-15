@@ -32,7 +32,7 @@ function getRecentActivity(payments: DashboardPayment[]) {
 export default async function DashboardPage() {
   const session = await requireAuth();
 
-  const data = await getDashboardData(session.user.id as string);
+  const data = await getDashboardData(session.user.id);
 
   const deals = data.deals;
   const deliverables = data.deliverables;

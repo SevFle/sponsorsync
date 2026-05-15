@@ -28,6 +28,14 @@ beforeEach(() => {
 });
 
 describe("getDashboardData - consolidation", () => {
+  it("throws for empty userId", async () => {
+    await expect(getDashboardData("")).rejects.toThrow("Invalid user ID");
+  });
+
+  it("throws for whitespace-only userId", async () => {
+    await expect(getDashboardData("   ")).rejects.toThrow("Invalid user ID");
+  });
+
   it("calls all queries with the same userId", async () => {
     (getDealsByUserId as ReturnType<typeof vi.fn>).mockResolvedValue([]);
     (getDeliverablesByUserId as ReturnType<typeof vi.fn>).mockResolvedValue([]);

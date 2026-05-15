@@ -173,13 +173,13 @@ describe("Dashboard auth flow - session validation", () => {
     expect(mockGetDashboardData).toHaveBeenCalledTimes(1);
   });
 
-  it("handles session with only user id", async () => {
-    setAuth({ user: { id: "u" } } as any);
-    mockApiFetch();
+  it("rejects session with whitespace-only user id", async () => {
+    (requireAuth as ReturnType<typeof vi.fn>).mockImplementation(() => {
+      throw new Error("NEXT_REDIRECT");
+    });
     const { default: DashboardPage } = await import("@/app/(dashboard)/page");
 
-    const result = await DashboardPage();
-    expect(result).toBeDefined();
-    expect(mockGetDashboardData).toHaveBeenCalled();
+    await expect(DashboardPage()).rejects.toThrow("NEXT_REDIRECT");
+    expect(mockGetDashboardData).not.toHaveBeenCalled();
   });
 });

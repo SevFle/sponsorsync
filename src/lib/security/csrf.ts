@@ -1,4 +1,4 @@
-import { createHash, randomBytes } from "crypto";
+import { createHash, randomBytes, timingSafeEqual } from "crypto";
 
 export const CSRF_COOKIE_NAME = "csrfToken";
 export const CSRF_HEADER_NAME = "X-CSRF-Token";
@@ -16,7 +16,10 @@ export function validateCsrfToken(
   headerToken: string | undefined
 ): boolean {
   if (!cookieToken || !headerToken) return false;
-  return cookieToken === headerToken;
+  if (cookieToken.length !== headerToken.length) return false;
+  const a = Buffer.from(cookieToken);
+  const b = Buffer.from(headerToken);
+  return timingSafeEqual(a, b);
 }
 
 const MUTATING_METHODS = new Set(["POST", "PUT", "DELETE", "PATCH"]);

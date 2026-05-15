@@ -11,6 +11,13 @@ interface AnalyticsData {
   trends: TrendSummary | null;
 }
 
+interface AnalyticsResponse {
+  revenue: RevenueSummary;
+  pipeline: PipelineSummary;
+  deliverables: DeliverableMetricsResult;
+  trends: TrendSummary;
+}
+
 interface AnalyticsState extends AnalyticsData {
   isLoading: boolean;
   error: string | null;
@@ -30,14 +37,18 @@ export function useAnalytics(range: DateRangePreset, enabled = true) {
     setState((prev) => ({ ...prev, isLoading: true, error: null }));
 
     try {
-      const [revenue, pipeline, deliverables, trends] = await Promise.all([
-        apiFetch<RevenueSummary>(`/api/analytics/revenue?range=${range}`),
-        apiFetch<PipelineSummary>("/api/analytics/pipeline"),
-        apiFetch<DeliverableMetricsResult>(`/api/analytics/deliverables?range=${range}`),
-        apiFetch<TrendSummary>("/api/analytics/trends"),
-      ]);
+      const data = await apiFetch<AnalyticsResponse>(
+        `/api/analytics?range=${range}`
+      );
 
-      setState({ revenue, pipeline, deliverables, trends, isLoading: false, error: null });
+      setState({
+        revenue: data.revenue,
+        pipeline: data.pipeline,
+        deliverables: data.deliverables,
+        trends: data.trends,
+        isLoading: false,
+        error: null,
+      });
     } catch (err) {
       setState((prev) => ({
         ...prev,

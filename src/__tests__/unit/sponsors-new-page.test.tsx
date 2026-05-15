@@ -69,7 +69,7 @@ describe("NewSponsorPage - auth guard", () => {
     render(<NewSponsorPage />);
 
     await waitFor(() => {
-      expect(mockRouter.replace).toHaveBeenCalledWith("/login");
+      expect(mockRouter.replace).toHaveBeenCalledWith(expect.stringContaining("/login?callbackUrl="));
     });
   });
 
@@ -121,7 +121,7 @@ describe("NewSponsorPage - auth guard", () => {
     const { container } = render(<NewSponsorPage />);
 
     await waitFor(() => {
-      expect(mockRouter.replace).toHaveBeenCalledWith("/login");
+      expect(mockRouter.replace).toHaveBeenCalledWith(expect.stringContaining("/login?callbackUrl="));
     });
 
     expect(container.innerHTML).toBe("");

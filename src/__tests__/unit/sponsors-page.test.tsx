@@ -111,7 +111,7 @@ describe("SponsorsPage - useSession auth guard", () => {
     render(<SponsorsPage />);
 
     await waitFor(() => {
-      expect(mockRouter.replace).toHaveBeenCalledWith("/login");
+      expect(mockRouter.replace).toHaveBeenCalledWith(expect.stringContaining("/login?callbackUrl="));
     });
   });
 

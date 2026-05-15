@@ -108,7 +108,7 @@ describe("SponsorDetailPage - auth guard", () => {
     render(<SponsorDetailPage params={Promise.resolve({ id: SPONSOR_ID })} />);
 
     await waitFor(() => {
-      expect(mockRouter.replace).toHaveBeenCalledWith("/login");
+      expect(mockRouter.replace).toHaveBeenCalledWith(expect.stringContaining("/login?callbackUrl="));
     });
   });
 });

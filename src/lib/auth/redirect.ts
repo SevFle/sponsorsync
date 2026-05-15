@@ -1,5 +1,8 @@
-export function redirectToLogin(): void {
+export function redirectToLogin(callbackUrl?: string): void {
   if (typeof window !== "undefined") {
-    window.location.href = "/login";
+    const url = callbackUrl
+      ? `/login?callbackUrl=${encodeURIComponent(callbackUrl)}`
+      : "/login";
+    window.location.href = url;
   }
 }

@@ -13,6 +13,10 @@ export interface DashboardDataResult {
 }
 
 export async function getDashboardData(userId: string): Promise<DashboardDataResult> {
+  if (!userId?.trim()) {
+    throw new Error("Invalid user ID: authentication required");
+  }
+
   const [deals, deliverables, payments, sponsors] = await Promise.all([
     getDealsByUserId(userId),
     getDeliverablesByUserId(userId),

@@ -111,11 +111,11 @@ describe("getAuthenticatedSession", () => {
     expect(getServerSession).toHaveBeenCalledWith({});
   });
 
-  it("accepts session with whitespace id (truthy)", async () => {
+  it("returns null when session has whitespace-only id", async () => {
     (getServerSession as ReturnType<typeof vi.fn>).mockResolvedValue({ user: { id: "  " } });
 
     const result = await getAuthenticatedSession();
-    expect(result).toEqual({ user: { id: "  " } });
+    expect(result).toBeNull();
   });
 });
 
@@ -155,11 +155,11 @@ describe("requireAuth", () => {
     expect(redirect).toHaveBeenCalledWith("/login");
   });
 
-  it("returns session with whitespace id (truthy)", async () => {
+  it("redirects to /login when session has whitespace-only id", async () => {
     (getServerSession as ReturnType<typeof vi.fn>).mockResolvedValue({ user: { id: "  " } });
 
-    const result = await requireAuth();
-    expect(result).toEqual({ user: { id: "  " } });
+    await expect(requireAuth()).rejects.toThrow("NEXT_REDIRECT");
+    expect(redirect).toHaveBeenCalledWith("/login");
   });
 
   it("calls getServerSession with authOptions", async () => {

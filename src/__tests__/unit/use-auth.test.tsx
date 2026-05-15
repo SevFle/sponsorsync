@@ -95,12 +95,14 @@ describe("useAuth - return values", () => {
 });
 
 describe("useAuth - redirect behavior", () => {
-  it("redirects to /login by default when unauthenticated", async () => {
+  it("redirects to /login with callbackUrl when unauthenticated", async () => {
     mockUnauthenticatedSession();
     renderHook(() => useAuth());
 
     await waitFor(() => {
-      expect(mockRouter.replace).toHaveBeenCalledWith("/login");
+      expect(mockRouter.replace).toHaveBeenCalledWith(
+        expect.stringContaining("/login?callbackUrl=")
+      );
     });
   });
 
@@ -126,12 +128,14 @@ describe("useAuth - redirect behavior", () => {
     expect(mockRouter.replace).not.toHaveBeenCalled();
   });
 
-  it("supports custom redirect path", async () => {
+  it("supports custom redirect path with callbackUrl", async () => {
     mockUnauthenticatedSession();
     renderHook(() => useAuth({ redirectTo: "/signin" }));
 
     await waitFor(() => {
-      expect(mockRouter.replace).toHaveBeenCalledWith("/signin");
+      expect(mockRouter.replace).toHaveBeenCalledWith(
+        expect.stringContaining("/signin?callbackUrl=")
+      );
     });
   });
 
@@ -161,7 +165,9 @@ describe("useAuth - redirect behavior", () => {
 
     await waitFor(() => {
       expect(mockRouter.replace).toHaveBeenCalledTimes(1);
-      expect(mockRouter.replace).toHaveBeenCalledWith("/login");
+      expect(mockRouter.replace).toHaveBeenCalledWith(
+        expect.stringContaining("/login?callbackUrl=")
+      );
     });
   });
 });

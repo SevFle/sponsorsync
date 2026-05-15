@@ -14,33 +14,29 @@ const mockPipeline = { totalPipelineValue: 5000, totalDeals: 3, stages: [] };
 const mockDeliverables = { completionRate: 80, verifiedCount: 4, overdueCount: 1, total: 5, statusCounts: { pending: 1, in_progress: 1, submitted: 1, verified: 4, missed: 1 } };
 const mockTrends = { revenueTrend: [], completionTrend: [] };
 
+const mockAggregatedResponse = {
+  revenue: mockRevenue,
+  pipeline: mockPipeline,
+  deliverables: mockDeliverables,
+  trends: mockTrends,
+};
+
 beforeEach(() => {
   vi.clearAllMocks();
-  mockApiFetch.mockImplementation((url: string) => {
-    if (url.includes("/revenue")) return Promise.resolve(mockRevenue);
-    if (url.includes("/pipeline")) return Promise.resolve(mockPipeline);
-    if (url.includes("/deliverables")) return Promise.resolve(mockDeliverables);
-    if (url.includes("/trends")) return Promise.resolve(mockTrends);
-    return Promise.resolve({});
-  });
+  mockApiFetch.mockResolvedValue(mockAggregatedResponse);
 });
 
 describe("useAnalytics - uses apiFetch with credentials", () => {
-  it("calls apiFetch for all four analytics endpoints", async () => {
+  it("calls apiFetch for the aggregated analytics endpoint", async () => {
     renderHook(() => useAnalytics("30d"));
 
     await waitFor(() => {
-      expect(mockApiFetch).toHaveBeenCalledTimes(4);
+      expect(mockApiFetch).toHaveBeenCalledTimes(1);
     });
 
     expect(mockApiFetch).toHaveBeenCalledWith(
-      expect.stringContaining("/api/analytics/revenue?range=30d")
+      expect.stringContaining("/api/analytics?range=30d")
     );
-    expect(mockApiFetch).toHaveBeenCalledWith("/api/analytics/pipeline");
-    expect(mockApiFetch).toHaveBeenCalledWith(
-      expect.stringContaining("/api/analytics/deliverables?range=30d")
-    );
-    expect(mockApiFetch).toHaveBeenCalledWith("/api/analytics/trends");
   });
 
   it("uses apiFetch which includes credentials: include", async () => {
@@ -50,17 +46,16 @@ describe("useAnalytics - uses apiFetch with credentials", () => {
       expect(mockApiFetch).toHaveBeenCalled();
     });
 
-    for (const call of mockApiFetch.mock.calls) {
-      expect(typeof call[0]).toBe("string");
-      expect(call[0]).toMatch(/^\/api\/analytics\//);
-    }
+    expect(mockApiFetch).toHaveBeenCalledWith(
+      expect.stringMatching(/^\/api\/analytics\?range=/)
+    );
   });
 
-  it("passes range parameter to revenue and deliverables endpoints", async () => {
+  it("passes range parameter to the aggregated endpoint", async () => {
     renderHook(() => useAnalytics("7d"));
 
     await waitFor(() => {
-      expect(mockApiFetch).toHaveBeenCalledTimes(4);
+      expect(mockApiFetch).toHaveBeenCalledTimes(1);
     });
 
     expect(mockApiFetch).toHaveBeenCalledWith(
@@ -140,19 +135,13 @@ describe("useAnalytics - refetch", () => {
     });
 
     vi.clearAllMocks();
-    mockApiFetch.mockImplementation((url: string) => {
-      if (url.includes("/revenue")) return Promise.resolve(mockRevenue);
-      if (url.includes("/pipeline")) return Promise.resolve(mockPipeline);
-      if (url.includes("/deliverables")) return Promise.resolve(mockDeliverables);
-      if (url.includes("/trends")) return Promise.resolve(mockTrends);
-      return Promise.resolve({});
-    });
+    mockApiFetch.mockResolvedValue(mockAggregatedResponse);
 
     await act(async () => {
       await result.current.refetch();
     });
 
-    expect(mockApiFetch).toHaveBeenCalledTimes(4);
+    expect(mockApiFetch).toHaveBeenCalledTimes(1);
   });
 });
 
@@ -167,7 +156,7 @@ describe("useAnalytics - auth gating via enabled parameter", () => {
     renderHook(() => useAnalytics("30d", true));
 
     await waitFor(() => {
-      expect(mockApiFetch).toHaveBeenCalledTimes(4);
+      expect(mockApiFetch).toHaveBeenCalledTimes(1);
     });
   });
 
@@ -188,7 +177,7 @@ describe("useAnalytics - auth gating via enabled parameter", () => {
     rerender({ enabled: true });
 
     await waitFor(() => {
-      expect(mockApiFetch).toHaveBeenCalledTimes(4);
+      expect(mockApiFetch).toHaveBeenCalledTimes(1);
     });
   });
 

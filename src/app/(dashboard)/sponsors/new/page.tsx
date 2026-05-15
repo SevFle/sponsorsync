@@ -11,7 +11,8 @@ export default function NewSponsorPage() {
 
   useEffect(() => {
     if (sessionStatus === "unauthenticated") {
-      router.replace("/login");
+      const currentPath = window.location.pathname;
+      router.replace(`/login?callbackUrl=${encodeURIComponent(currentPath)}`);
     }
   }, [sessionStatus, router]);
 
