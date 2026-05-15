@@ -6,8 +6,9 @@ import { MetricCard } from "@/components/dashboard/metric-card";
 import { DeadlineRow } from "@/components/dashboard/deadline-row";
 import { ActivityRow } from "@/components/dashboard/activity-row";
 import { formatCurrency } from "@/lib/format";
-import { getDashboardData } from "@/lib/dashboard/data";
-import type { DashboardDeliverable, DashboardPayment } from "@/types/dashboard";
+import { createAuthenticatedFetch } from "@/lib/auth/authenticated-fetch";
+import { computeDashboardMetrics } from "@/lib/dashboard/metrics";
+import type { DashboardDeal, DashboardDeliverable, DashboardPayment } from "@/types/dashboard";
 
 function getUpcomingDeliverables(deliverables: DashboardDeliverable[]) {
   return deliverables
@@ -30,19 +31,23 @@ function getRecentActivity(payments: DashboardPayment[]) {
 }
 
 export default async function DashboardPage() {
-  const session = await requireAuth();
+  await requireAuth();
 
-  const userId = session.user.id;
+  const client = createAuthenticatedFetch();
 
-  const { deals, deliverables, payments, metrics } = await getDashboardData(userId);
+  const [dealsRes, deliverablesRes, paymentsRes] = await Promise.all([
+    client.get<{ deals: DashboardDeal[] }>("/api/deals"),
+    client.get<{ deliverables: DashboardDeliverable[] }>("/api/deliverables"),
+    client.get<{ payments: DashboardPayment[] }>("/api/payments"),
+  ]);
+
+  const deals = dealsRes.deals;
+  const deliverables = deliverablesRes.deliverables;
+  const payments = paymentsRes.payments;
+  const metrics = computeDashboardMetrics(deals, deliverables, payments);
 
   const upcomingDeliverables = getUpcomingDeliverables(deliverables as DashboardDeliverable[]);
-  const recentActivity = getRecentActivity(
-    payments.map((p) => ({
-      ...p,
-      createdAt: p.createdAt instanceof Date ? p.createdAt.toISOString() : String(p.createdAt),
-    })) as DashboardPayment[]
-  );
+  const recentActivity = getRecentActivity(payments);
 
   return (
     <div>

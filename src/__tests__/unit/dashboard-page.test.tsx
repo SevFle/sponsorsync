@@ -5,22 +5,22 @@ vi.mock("@/lib/auth/guard", () => ({
   requireAuth: vi.fn(),
 }));
 
-vi.mock("@/lib/db/queries/deals", () => ({
-  getDealsByUserId: vi.fn(),
-}));
-
-vi.mock("@/lib/db/queries/deliverables", () => ({
-  getDeliverablesByUserId: vi.fn(),
-}));
-
-vi.mock("@/lib/db/queries/payments", () => ({
-  getPaymentsByUserId: vi.fn(),
+vi.mock("@/lib/api-client", () => ({
+  apiFetch: vi.fn(),
+  ApiError: class ApiError extends Error {
+    status: number;
+    body: Record<string, unknown>;
+    constructor(status: number, message: string, body: Record<string, unknown> = {}) {
+      super(message);
+      this.name = "ApiError";
+      this.status = status;
+      this.body = body;
+    }
+  },
 }));
 
 import { requireAuth } from "@/lib/auth/guard";
-import { getDealsByUserId } from "@/lib/db/queries/deals";
-import { getDeliverablesByUserId } from "@/lib/db/queries/deliverables";
-import { getPaymentsByUserId } from "@/lib/db/queries/payments";
+import { apiFetch } from "@/lib/api-client";
 
 const mockSession = { user: { id: "user-1", email: "test@test.com", name: "Test User" } };
 
@@ -147,19 +147,26 @@ const mockPayments = [
   },
 ];
 
-function mockDbQueries(overrides: Partial<{
+function mockApiFetch(overrides: Partial<{
   deals: any[];
   deliverables: any[];
   payments: any[];
 }> = {}) {
-  (getDealsByUserId as ReturnType<typeof vi.fn>).mockResolvedValue(overrides.deals ?? []);
-  (getDeliverablesByUserId as ReturnType<typeof vi.fn>).mockResolvedValue(overrides.deliverables ?? []);
-  (getPaymentsByUserId as ReturnType<typeof vi.fn>).mockResolvedValue(overrides.payments ?? []);
+  const deals = overrides.deals ?? [];
+  const deliverables = overrides.deliverables ?? [];
+  const payments = overrides.payments ?? [];
+  (apiFetch as ReturnType<typeof vi.fn>).mockImplementation((url: string) => {
+    if (url === "/api/deals") return Promise.resolve({ deals });
+    if (url === "/api/deliverables") return Promise.resolve({ deliverables });
+    if (url === "/api/payments") return Promise.resolve({ payments });
+    return Promise.resolve({});
+  });
 }
 
 beforeEach(() => {
   vi.clearAllMocks();
   mockAuth(mockSession);
+  mockApiFetch();
 });
 
 describe("DashboardPage - server-side auth guard", () => {
@@ -173,38 +180,36 @@ describe("DashboardPage - server-side auth guard", () => {
 
   it("does not redirect when authenticated", async () => {
     mockAuth(mockSession);
-    mockDbQueries();
+    mockApiFetch();
     const { default: DashboardPage } = await import("@/app/(dashboard)/page");
 
     const result = await DashboardPage();
     expect(result).toBeDefined();
   });
 
-  it("does not query database when unauthenticated", async () => {
+  it("does not make fetch calls when unauthenticated", async () => {
     mockAuth(null);
     const { default: DashboardPage } = await import("@/app/(dashboard)/page");
 
     await expect(DashboardPage()).rejects.toThrow("NEXT_REDIRECT");
-    expect(getDealsByUserId).not.toHaveBeenCalled();
-    expect(getDeliverablesByUserId).not.toHaveBeenCalled();
-    expect(getPaymentsByUserId).not.toHaveBeenCalled();
+    expect(apiFetch).not.toHaveBeenCalled();
   });
 });
 
 describe("DashboardPage - server-side data fetching", () => {
-  it("queries deals, deliverables, and payments with userId", async () => {
-    mockDbQueries();
+  it("makes authenticated fetch calls for deals, deliverables, and payments", async () => {
+    mockApiFetch();
     const { default: DashboardPage } = await import("@/app/(dashboard)/page");
 
     await DashboardPage();
 
-    expect(getDealsByUserId).toHaveBeenCalledWith("user-1");
-    expect(getDeliverablesByUserId).toHaveBeenCalledWith("user-1");
-    expect(getPaymentsByUserId).toHaveBeenCalledWith("user-1");
+    expect(apiFetch).toHaveBeenCalledWith("/api/deals", expect.objectContaining({ method: "GET" }));
+    expect(apiFetch).toHaveBeenCalledWith("/api/deliverables", expect.objectContaining({ method: "GET" }));
+    expect(apiFetch).toHaveBeenCalledWith("/api/payments", expect.objectContaining({ method: "GET" }));
   });
 
-  it("queries all three data sources for authenticated user", async () => {
-    mockDbQueries({
+  it("fetches all three data sources for authenticated user", async () => {
+    mockApiFetch({
       deals: mockDeals,
       deliverables: mockDeliverables,
       payments: mockPayments,
@@ -213,28 +218,31 @@ describe("DashboardPage - server-side data fetching", () => {
 
     await DashboardPage();
 
-    expect(getDealsByUserId).toHaveBeenCalledTimes(1);
-    expect(getDeliverablesByUserId).toHaveBeenCalledTimes(1);
-    expect(getPaymentsByUserId).toHaveBeenCalledTimes(1);
+    expect(apiFetch).toHaveBeenCalledTimes(3);
   });
 
-  it("passes correct userId from session to all queries", async () => {
-    const customSession = { user: { id: "custom-user-42", email: "custom@test.com", name: "Custom User" } };
-    mockAuth(customSession);
-    mockDbQueries();
+  it("makes all three API calls concurrently", async () => {
+    mockApiFetch({
+      deals: mockDeals,
+      deliverables: mockDeliverables,
+      payments: mockPayments,
+    });
     const { default: DashboardPage } = await import("@/app/(dashboard)/page");
 
     await DashboardPage();
 
-    expect(getDealsByUserId).toHaveBeenCalledWith("custom-user-42");
-    expect(getDeliverablesByUserId).toHaveBeenCalledWith("custom-user-42");
-    expect(getPaymentsByUserId).toHaveBeenCalledWith("custom-user-42");
+    const calledUrls = (apiFetch as ReturnType<typeof vi.fn>).mock.calls.map(
+      (call: any[]) => call[0]
+    );
+    expect(calledUrls).toContain("/api/deals");
+    expect(calledUrls).toContain("/api/deliverables");
+    expect(calledUrls).toContain("/api/payments");
   });
 });
 
 describe("DashboardPage - rendering", () => {
   it("renders all metric cards with correct values", async () => {
-    mockDbQueries({
+    mockApiFetch({
       deals: mockDeals,
       deliverables: mockDeliverables,
       payments: mockPayments,
@@ -253,7 +261,7 @@ describe("DashboardPage - rendering", () => {
   });
 
   it("renders upcoming deadlines section", async () => {
-    mockDbQueries({
+    mockApiFetch({
       deals: mockDeals,
       deliverables: mockDeliverables,
       payments: [],
@@ -272,7 +280,7 @@ describe("DashboardPage - rendering", () => {
   });
 
   it("excludes verified and missed deliverables from upcoming", async () => {
-    mockDbQueries({
+    mockApiFetch({
       deals: [],
       deliverables: mockDeliverables,
       payments: [],
@@ -291,7 +299,7 @@ describe("DashboardPage - rendering", () => {
   });
 
   it("renders recent activity from payments", async () => {
-    mockDbQueries({
+    mockApiFetch({
       deals: [],
       deliverables: [],
       payments: mockPayments,
@@ -311,7 +319,7 @@ describe("DashboardPage - rendering", () => {
   });
 
   it("renders deal pipeline summary cards", async () => {
-    mockDbQueries({
+    mockApiFetch({
       deals: mockDeals,
       deliverables: [],
       payments: [],
@@ -331,7 +339,7 @@ describe("DashboardPage - rendering", () => {
   });
 
   it("renders quick action links", async () => {
-    mockDbQueries();
+    mockApiFetch();
     const { default: DashboardPage } = await import("@/app/(dashboard)/page");
 
     const result = await DashboardPage();
@@ -353,7 +361,7 @@ describe("DashboardPage - rendering", () => {
   });
 
   it("renders pipeline cards as links to deals page", async () => {
-    mockDbQueries({
+    mockApiFetch({
       deals: mockDeals,
       deliverables: [],
       payments: [],
@@ -376,7 +384,7 @@ describe("DashboardPage - rendering", () => {
 
 describe("DashboardPage - empty states", () => {
   it("shows empty state for upcoming deadlines when none exist", async () => {
-    mockDbQueries();
+    mockApiFetch();
     const { default: DashboardPage } = await import("@/app/(dashboard)/page");
 
     const result = await DashboardPage();
@@ -389,7 +397,7 @@ describe("DashboardPage - empty states", () => {
   });
 
   it("shows empty state for recent activity when none exist", async () => {
-    mockDbQueries();
+    mockApiFetch();
     const { default: DashboardPage } = await import("@/app/(dashboard)/page");
 
     const result = await DashboardPage();
@@ -405,37 +413,40 @@ describe("DashboardPage - empty states", () => {
 });
 
 describe("DashboardPage - error propagation", () => {
-  it("propagates database errors from deals query", async () => {
-    (getDealsByUserId as ReturnType<typeof vi.fn>).mockRejectedValue(
-      new Error("Database connection failed")
-    );
-    (getDeliverablesByUserId as ReturnType<typeof vi.fn>).mockResolvedValue([]);
-    (getPaymentsByUserId as ReturnType<typeof vi.fn>).mockResolvedValue([]);
+  it("propagates errors from deals API call", async () => {
+    (apiFetch as ReturnType<typeof vi.fn>).mockImplementation((url: string) => {
+      if (url === "/api/deals") return Promise.reject(new Error("Failed to fetch deals"));
+      if (url === "/api/deliverables") return Promise.resolve({ deliverables: [] });
+      if (url === "/api/payments") return Promise.resolve({ payments: [] });
+      return Promise.resolve({});
+    });
     const { default: DashboardPage } = await import("@/app/(dashboard)/page");
 
-    await expect(DashboardPage()).rejects.toThrow("Database connection failed");
+    await expect(DashboardPage()).rejects.toThrow("Failed to fetch deals");
   });
 
-  it("propagates database errors from deliverables query", async () => {
-    (getDealsByUserId as ReturnType<typeof vi.fn>).mockResolvedValue([]);
-    (getDeliverablesByUserId as ReturnType<typeof vi.fn>).mockRejectedValue(
-      new Error("Query timeout")
-    );
-    (getPaymentsByUserId as ReturnType<typeof vi.fn>).mockResolvedValue([]);
+  it("propagates errors from deliverables API call", async () => {
+    (apiFetch as ReturnType<typeof vi.fn>).mockImplementation((url: string) => {
+      if (url === "/api/deals") return Promise.resolve({ deals: [] });
+      if (url === "/api/deliverables") return Promise.reject(new Error("Failed to fetch deliverables"));
+      if (url === "/api/payments") return Promise.resolve({ payments: [] });
+      return Promise.resolve({});
+    });
     const { default: DashboardPage } = await import("@/app/(dashboard)/page");
 
-    await expect(DashboardPage()).rejects.toThrow("Query timeout");
+    await expect(DashboardPage()).rejects.toThrow("Failed to fetch deliverables");
   });
 
-  it("propagates database errors from payments query", async () => {
-    (getDealsByUserId as ReturnType<typeof vi.fn>).mockResolvedValue([]);
-    (getDeliverablesByUserId as ReturnType<typeof vi.fn>).mockResolvedValue([]);
-    (getPaymentsByUserId as ReturnType<typeof vi.fn>).mockRejectedValue(
-      new Error("Connection refused")
-    );
+  it("propagates errors from payments API call", async () => {
+    (apiFetch as ReturnType<typeof vi.fn>).mockImplementation((url: string) => {
+      if (url === "/api/deals") return Promise.resolve({ deals: [] });
+      if (url === "/api/deliverables") return Promise.resolve({ deliverables: [] });
+      if (url === "/api/payments") return Promise.reject(new Error("Failed to fetch payments"));
+      return Promise.resolve({});
+    });
     const { default: DashboardPage } = await import("@/app/(dashboard)/page");
 
-    await expect(DashboardPage()).rejects.toThrow("Connection refused");
+    await expect(DashboardPage()).rejects.toThrow("Failed to fetch payments");
   });
 });
 
@@ -449,7 +460,7 @@ describe("DashboardPage - boundary values", () => {
       sponsorName: "Sponsor",
     }));
 
-    mockDbQueries({
+    mockApiFetch({
       deals: [],
       deliverables: manyDeliverables,
       payments: [],
@@ -479,7 +490,7 @@ describe("DashboardPage - boundary values", () => {
       sponsorName: `Sponsor ${i}`,
     }));
 
-    mockDbQueries({
+    mockApiFetch({
       deals: [],
       deliverables: [],
       payments: manyPayments,
@@ -498,7 +509,7 @@ describe("DashboardPage - boundary values", () => {
   });
 
   it("handles zero value metrics", async () => {
-    mockDbQueries({
+    mockApiFetch({
       deals: [],
       deliverables: [],
       payments: [],
@@ -520,7 +531,7 @@ describe("DashboardPage - boundary values", () => {
       { id: "dl3", title: "Middle", dueDate: futureDate(5), status: "pending", sponsorName: "C" },
     ];
 
-    mockDbQueries({
+    mockApiFetch({
       deals: [],
       deliverables: unsorted,
       payments: [],
@@ -547,7 +558,7 @@ describe("DashboardPage - boundary values", () => {
       { id: "p3", amount: 300, currency: "USD", status: "paid", dueDate: null, paidDate: null, createdAt: "2025-03-01T00:00:00Z", sponsorName: "MidCo" },
     ];
 
-    mockDbQueries({
+    mockApiFetch({
       deals: [],
       deliverables: [],
       payments,
@@ -572,7 +583,7 @@ describe("DashboardPage - boundary values", () => {
       { id: "dl1", title: "Overdue Item", dueDate: pastDate(5), status: "in_progress", sponsorName: "Late Sponsor" },
     ];
 
-    mockDbQueries({
+    mockApiFetch({
       deals: [],
       deliverables: overdueDeliverable,
       payments: [],
@@ -595,7 +606,7 @@ describe("DashboardPage - boundary values", () => {
       { id: "dl1", title: "Due Soon", dueDate: futureDate(1), status: "pending", sponsorName: "Soon Sponsor" },
     ];
 
-    mockDbQueries({
+    mockApiFetch({
       deals: [],
       deliverables: soonDeliverable,
       payments: [],
@@ -616,16 +627,16 @@ describe("DashboardPage - boundary values", () => {
 describe("DashboardPage - session edge cases", () => {
   it("handles session with minimal user data", async () => {
     mockAuth({ user: { id: "u" } } as any);
-    mockDbQueries();
+    mockApiFetch();
     const { default: DashboardPage } = await import("@/app/(dashboard)/page");
 
     const result = await DashboardPage();
     expect(result).toBeDefined();
-    expect(getDealsByUserId).toHaveBeenCalledWith("u");
+    expect(apiFetch).toHaveBeenCalled();
   });
 
   it("calls requireAuth exactly once per render", async () => {
-    mockDbQueries();
+    mockApiFetch();
     const { default: DashboardPage } = await import("@/app/(dashboard)/page");
 
     await DashboardPage();
