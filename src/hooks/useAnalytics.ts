@@ -16,13 +16,13 @@ interface AnalyticsState extends AnalyticsData {
   error: string | null;
 }
 
-export function useAnalytics(range: DateRangePreset) {
+export function useAnalytics(range: DateRangePreset, enabled = true) {
   const [state, setState] = useState<AnalyticsState>({
     revenue: null,
     pipeline: null,
     deliverables: null,
     trends: null,
-    isLoading: true,
+    isLoading: enabled,
     error: null,
   });
 
@@ -48,8 +48,9 @@ export function useAnalytics(range: DateRangePreset) {
   }, [range]);
 
   useEffect(() => {
+    if (!enabled) return;
     fetchData();
-  }, [fetchData]);
+  }, [fetchData, enabled]);
 
   return { ...state, refetch: fetchData };
 }

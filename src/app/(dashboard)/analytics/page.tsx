@@ -15,7 +15,8 @@ export default function AnalyticsPage() {
   const { isAuthenticated, isLoading: authLoading } = useAuth();
   const { range, setRange } = useDateRange();
   const { revenue, pipeline, deliverables, trends, isLoading, error } = useAnalytics(
-    authLoading || !isAuthenticated ? "30d" : range
+    range,
+    !authLoading && isAuthenticated
   );
 
   if (authLoading || !isAuthenticated) {

@@ -109,10 +109,15 @@ describe("useAnalytics - response handling", () => {
     expect(result.current.error).toBe("Unknown error");
   });
 
-  it("starts with isLoading true", () => {
+  it("starts with isLoading true when enabled", () => {
     mockApiFetch.mockReturnValue(new Promise(() => {}));
     const { result } = renderHook(() => useAnalytics("30d"));
     expect(result.current.isLoading).toBe(true);
+  });
+
+  it("starts with isLoading false when disabled", () => {
+    const { result } = renderHook(() => useAnalytics("30d", false));
+    expect(result.current.isLoading).toBe(false);
   });
 });
 
