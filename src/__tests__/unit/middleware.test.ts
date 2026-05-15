@@ -72,46 +72,79 @@ describe("middleware - public routes", () => {
 });
 
 describe("middleware - API GET routes pass through", () => {
-  it("allows /api/deals GET (no CSRF needed)", () => {
+  it("allows /api/deals GET with session token (no CSRF needed)", () => {
+    const req = createMockRequest("/api/deals", {
+      method: "GET",
+      cookies: { "next-auth.session-token": "valid" },
+    });
+    const response = middleware(req);
+    expect(response.status).toBe(200);
+  });
+
+  it("allows /api/dashboard GET with session token", () => {
+    const req = createMockRequest("/api/dashboard", {
+      method: "GET",
+      cookies: { "next-auth.session-token": "valid" },
+    });
+    const response = middleware(req);
+    expect(response.status).toBe(200);
+  });
+
+  it("allows /api/sponsors GET with session token", () => {
+    const req = createMockRequest("/api/sponsors", {
+      method: "GET",
+      cookies: { "next-auth.session-token": "valid" },
+    });
+    const response = middleware(req);
+    expect(response.status).toBe(200);
+  });
+
+  it("blocks /api/deals GET without session token", () => {
     const req = createMockRequest("/api/deals", { method: "GET" });
     const response = middleware(req);
-    expect(response.status).toBe(200);
+    expect(response.status).toBe(401);
   });
 
-  it("allows /api/dashboard GET", () => {
+  it("blocks /api/dashboard GET without session token", () => {
     const req = createMockRequest("/api/dashboard", { method: "GET" });
     const response = middleware(req);
-    expect(response.status).toBe(200);
-  });
-
-  it("allows /api/sponsors GET", () => {
-    const req = createMockRequest("/api/sponsors", { method: "GET" });
-    const response = middleware(req);
-    expect(response.status).toBe(200);
+    expect(response.status).toBe(401);
   });
 });
 
 describe("middleware - API mutating routes CSRF validation", () => {
   it("blocks POST to /api/deals without CSRF token", () => {
-    const req = createMockRequest("/api/deals", { method: "POST" });
+    const req = createMockRequest("/api/deals", {
+      method: "POST",
+      cookies: { "next-auth.session-token": "valid" },
+    });
     const response = middleware(req);
     expect(response.status).toBe(403);
   });
 
   it("blocks PUT to /api/deals/123 without CSRF token", () => {
-    const req = createMockRequest("/api/deals/123", { method: "PUT" });
+    const req = createMockRequest("/api/deals/123", {
+      method: "PUT",
+      cookies: { "next-auth.session-token": "valid" },
+    });
     const response = middleware(req);
     expect(response.status).toBe(403);
   });
 
   it("blocks DELETE to /api/sponsors/456 without CSRF token", () => {
-    const req = createMockRequest("/api/sponsors/456", { method: "DELETE" });
+    const req = createMockRequest("/api/sponsors/456", {
+      method: "DELETE",
+      cookies: { "next-auth.session-token": "valid" },
+    });
     const response = middleware(req);
     expect(response.status).toBe(403);
   });
 
   it("blocks PATCH to /api/settings without CSRF token", () => {
-    const req = createMockRequest("/api/settings", { method: "PATCH" });
+    const req = createMockRequest("/api/settings", {
+      method: "PATCH",
+      cookies: { "next-auth.session-token": "valid" },
+    });
     const response = middleware(req);
     expect(response.status).toBe(403);
   });
@@ -119,7 +152,7 @@ describe("middleware - API mutating routes CSRF validation", () => {
   it("blocks POST when cookie has token but header is missing", () => {
     const req = createMockRequest("/api/deals", {
       method: "POST",
-      cookies: { csrfToken: "my-token" },
+      cookies: { csrfToken: "my-token", "next-auth.session-token": "valid" },
     });
     const response = middleware(req);
     expect(response.status).toBe(403);
@@ -129,6 +162,7 @@ describe("middleware - API mutating routes CSRF validation", () => {
     const req = createMockRequest("/api/deals", {
       method: "POST",
       headers: { "X-CSRF-Token": "my-token" },
+      cookies: { "next-auth.session-token": "valid" },
     });
     const response = middleware(req);
     expect(response.status).toBe(403);
@@ -137,7 +171,7 @@ describe("middleware - API mutating routes CSRF validation", () => {
   it("blocks POST when cookie and header tokens differ", () => {
     const req = createMockRequest("/api/deals", {
       method: "POST",
-      cookies: { csrfToken: "token-a" },
+      cookies: { csrfToken: "token-a", "next-auth.session-token": "valid" },
       headers: { "X-CSRF-Token": "token-b" },
     });
     const response = middleware(req);
@@ -147,7 +181,7 @@ describe("middleware - API mutating routes CSRF validation", () => {
   it("allows POST when cookie and header tokens match", () => {
     const req = createMockRequest("/api/deals", {
       method: "POST",
-      cookies: { csrfToken: "matching-token" },
+      cookies: { csrfToken: "matching-token", "next-auth.session-token": "valid" },
       headers: { "X-CSRF-Token": "matching-token" },
     });
     const response = middleware(req);
@@ -157,7 +191,7 @@ describe("middleware - API mutating routes CSRF validation", () => {
   it("allows PUT when cookie and header tokens match", () => {
     const req = createMockRequest("/api/deals/123", {
       method: "PUT",
-      cookies: { csrfToken: "matching-token" },
+      cookies: { csrfToken: "matching-token", "next-auth.session-token": "valid" },
       headers: { "X-CSRF-Token": "matching-token" },
     });
     const response = middleware(req);
@@ -167,7 +201,7 @@ describe("middleware - API mutating routes CSRF validation", () => {
   it("allows DELETE when cookie and header tokens match", () => {
     const req = createMockRequest("/api/sponsors/456", {
       method: "DELETE",
-      cookies: { csrfToken: "matching-token" },
+      cookies: { csrfToken: "matching-token", "next-auth.session-token": "valid" },
       headers: { "X-CSRF-Token": "matching-token" },
     });
     const response = middleware(req);
@@ -177,7 +211,7 @@ describe("middleware - API mutating routes CSRF validation", () => {
   it("allows PATCH when cookie and header tokens match", () => {
     const req = createMockRequest("/api/settings", {
       method: "PATCH",
-      cookies: { csrfToken: "matching-token" },
+      cookies: { csrfToken: "matching-token", "next-auth.session-token": "valid" },
       headers: { "X-CSRF-Token": "matching-token" },
     });
     const response = middleware(req);
@@ -185,10 +219,20 @@ describe("middleware - API mutating routes CSRF validation", () => {
   });
 
   it("returns JSON error body on CSRF failure", async () => {
-    const req = createMockRequest("/api/deals", { method: "POST" });
+    const req = createMockRequest("/api/deals", {
+      method: "POST",
+      cookies: { "next-auth.session-token": "valid" },
+    });
     const response = middleware(req);
     const body = await response.json();
     expect(body.error).toBe("CSRF token validation failed");
+  });
+
+  it("returns JSON error body on session token failure", async () => {
+    const req = createMockRequest("/api/deals", { method: "POST" });
+    const response = middleware(req);
+    const body = await response.json();
+    expect(body.error).toBe("Unauthorized");
   });
 
   it("does not validate CSRF for public webhook POST routes", () => {
