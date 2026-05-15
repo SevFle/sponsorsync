@@ -96,45 +96,114 @@ describe("middleware - public routes", () => {
   });
 });
 
-describe("middleware - API routes (handled by route handlers)", () => {
-  it("allows /api/deals GET without session token (route handles auth)", () => {
+describe("middleware - API routes session validation", () => {
+  it("blocks /api/deals GET without session token", () => {
     const req = createMockRequest("/api/deals", { method: "GET" });
     const response = middleware(req);
+    expect(response.status).toBe(401);
+  });
+
+  it("allows /api/deals GET with session token", () => {
+    const req = createMockRequest("/api/deals", {
+      method: "GET",
+      cookies: { "next-auth.session-token": "valid" },
+    });
+    const response = middleware(req);
     expect(response.status).toBe(200);
   });
 
-  it("allows /api/dashboard GET without session token (route handles auth)", () => {
+  it("blocks /api/dashboard GET without session token", () => {
     const req = createMockRequest("/api/dashboard", { method: "GET" });
     const response = middleware(req);
+    expect(response.status).toBe(401);
+  });
+
+  it("allows /api/dashboard GET with session token", () => {
+    const req = createMockRequest("/api/dashboard", {
+      method: "GET",
+      cookies: { "next-auth.session-token": "valid" },
+    });
+    const response = middleware(req);
     expect(response.status).toBe(200);
   });
 
-  it("allows /api/sponsors GET without session token", () => {
+  it("blocks /api/sponsors GET without session token", () => {
     const req = createMockRequest("/api/sponsors", { method: "GET" });
     const response = middleware(req);
+    expect(response.status).toBe(401);
+  });
+
+  it("allows /api/sponsors GET with session token", () => {
+    const req = createMockRequest("/api/sponsors", {
+      method: "GET",
+      cookies: { "next-auth.session-token": "valid" },
+    });
+    const response = middleware(req);
     expect(response.status).toBe(200);
   });
 
-  it("allows /api/payments GET without session token", () => {
+  it("blocks /api/payments GET without session token", () => {
     const req = createMockRequest("/api/payments", { method: "GET" });
     const response = middleware(req);
+    expect(response.status).toBe(401);
+  });
+
+  it("allows /api/payments GET with session token", () => {
+    const req = createMockRequest("/api/payments", {
+      method: "GET",
+      cookies: { "next-auth.session-token": "valid" },
+    });
+    const response = middleware(req);
     expect(response.status).toBe(200);
   });
 
-  it("allows /api/deliverables GET without session token", () => {
+  it("blocks /api/deliverables GET without session token", () => {
     const req = createMockRequest("/api/deliverables", { method: "GET" });
     const response = middleware(req);
-    expect(response.status).toBe(200);
+    expect(response.status).toBe(401);
   });
 
-  it("allows /api/integrations GET without session token", () => {
-    const req = createMockRequest("/api/integrations", { method: "GET" });
+  it("allows /api/deliverables GET with session token", () => {
+    const req = createMockRequest("/api/deliverables", {
+      method: "GET",
+      cookies: { "next-auth.session-token": "valid" },
+    });
     const response = middleware(req);
     expect(response.status).toBe(200);
   });
 
-  it("allows /api/templates GET without session token", () => {
+  it("blocks /api/integrations GET without session token", () => {
+    const req = createMockRequest("/api/integrations", { method: "GET" });
+    const response = middleware(req);
+    expect(response.status).toBe(401);
+  });
+
+  it("allows /api/integrations GET with session token", () => {
+    const req = createMockRequest("/api/integrations", {
+      method: "GET",
+      cookies: { "next-auth.session-token": "valid" },
+    });
+    const response = middleware(req);
+    expect(response.status).toBe(200);
+  });
+
+  it("blocks /api/templates GET without session token", () => {
     const req = createMockRequest("/api/templates", { method: "GET" });
+    const response = middleware(req);
+    expect(response.status).toBe(401);
+  });
+
+  it("allows /api/templates GET with session token", () => {
+    const req = createMockRequest("/api/templates", {
+      method: "GET",
+      cookies: { "next-auth.session-token": "valid" },
+    });
+    const response = middleware(req);
+    expect(response.status).toBe(200);
+  });
+
+  it("allows /api/ical/[token] without session token", () => {
+    const req = createMockRequest("/api/ical/abc123");
     const response = middleware(req);
     expect(response.status).toBe(200);
   });

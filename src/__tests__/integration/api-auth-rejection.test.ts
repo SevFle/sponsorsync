@@ -506,4 +506,101 @@ describe("Unauthenticated access - session without user.id", () => {
     const res = await GET();
     expect(res.status).toBe(401);
   });
+
+  it("GET /api/payments/[id] returns 401", async () => {
+    const { GET } = await import("@/app/api/payments/[id]/route");
+    const UUID = "550e8400-e29b-41d4-a716-446655440000";
+    const res = await GET(
+      new Request(`http://localhost:3000/api/payments/${UUID}`),
+      { params: Promise.resolve({ id: UUID }) }
+    );
+    expect(res.status).toBe(401);
+  });
+
+  it("PATCH /api/payments/[id] returns 401", async () => {
+    const { PATCH } = await import("@/app/api/payments/[id]/route");
+    const UUID = "550e8400-e29b-41d4-a716-446655440000";
+    const res = await PATCH(
+      new Request(`http://localhost:3000/api/payments/${UUID}`, {
+        method: "PATCH",
+        body: JSON.stringify({ status: "paid" }),
+        headers: { "Content-Type": "application/json" },
+      }),
+      { params: Promise.resolve({ id: UUID }) }
+    );
+    expect(res.status).toBe(401);
+  });
+
+  it("DELETE /api/payments/[id] returns 401", async () => {
+    const { DELETE } = await import("@/app/api/payments/[id]/route");
+    const UUID = "550e8400-e29b-41d4-a716-446655440000";
+    const res = await DELETE(
+      new Request(`http://localhost:3000/api/payments/${UUID}`, { method: "DELETE" }),
+      { params: Promise.resolve({ id: UUID }) }
+    );
+    expect(res.status).toBe(401);
+  });
+
+  it("GET /api/deals/[id] returns 401", async () => {
+    const { GET } = await import("@/app/api/deals/[id]/route");
+    const UUID = "550e8400-e29b-41d4-a716-446655440000";
+    const res = await GET(
+      new Request(`http://localhost:3000/api/deals/${UUID}`),
+      { params: Promise.resolve({ id: UUID }) }
+    );
+    expect(res.status).toBe(401);
+  });
+
+  it("PATCH /api/deals/[id] returns 401", async () => {
+    const { PATCH } = await import("@/app/api/deals/[id]/route");
+    const UUID = "550e8400-e29b-41d4-a716-446655440000";
+    const res = await PATCH(
+      new Request(`http://localhost:3000/api/deals/${UUID}`, {
+        method: "PATCH",
+        body: JSON.stringify({ title: "Test" }),
+        headers: { "Content-Type": "application/json" },
+      }),
+      { params: Promise.resolve({ id: UUID }) }
+    );
+    expect(res.status).toBe(401);
+  });
+
+  it("DELETE /api/deals/[id] returns 401", async () => {
+    const { DELETE } = await import("@/app/api/deals/[id]/route");
+    const UUID = "550e8400-e29b-41d4-a716-446655440000";
+    const res = await DELETE(
+      new Request(`http://localhost:3000/api/deals/${UUID}`, { method: "DELETE" }),
+      { params: Promise.resolve({ id: UUID }) }
+    );
+    expect(res.status).toBe(401);
+  });
+
+  it("POST /api/integrations/connect returns 401", async () => {
+    const { POST } = await import("@/app/api/integrations/connect/route");
+    const req = new Request("http://localhost:3000/api/integrations/connect", {
+      method: "POST",
+      body: JSON.stringify({ platform: "buzzsprout", apiKey: "key" }),
+      headers: { "Content-Type": "application/json" },
+    });
+    const res = await POST(req);
+    expect(res.status).toBe(401);
+  });
+
+  it("GET /api/integrations/[platform] returns 401", async () => {
+    const { GET } = await import("@/app/api/integrations/[platform]/route");
+    const res = await GET(
+      new Request("http://localhost:3000/api/integrations/buzzsprout"),
+      { params: Promise.resolve({ platform: "buzzsprout" }) }
+    );
+    expect(res.status).toBe(401);
+  });
+
+  it("DELETE /api/integrations/[platform] returns 401", async () => {
+    const { DELETE } = await import("@/app/api/integrations/[platform]/route");
+    const res = await DELETE(
+      new Request("http://localhost:3000/api/integrations/buzzsprout", { method: "DELETE" }),
+      { params: Promise.resolve({ platform: "buzzsprout" }) }
+    );
+    expect(res.status).toBe(401);
+  });
 });

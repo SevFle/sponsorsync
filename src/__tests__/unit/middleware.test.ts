@@ -324,7 +324,10 @@ describe("middleware - CSRF cookie generation", () => {
   });
 
   it("does not set csrfToken for API routes", () => {
-    const req = createMockRequest("/api/deals", { method: "GET" });
+    const req = createMockRequest("/api/deals", {
+      method: "GET",
+      cookies: { "next-auth.session-token": "valid" },
+    });
     const response = middleware(req);
     const setCookie = response.headers.get("set-cookie");
     expect(setCookie).toBeNull();
