@@ -1,10 +1,17 @@
 import Stripe from "stripe";
 import { config } from "@/lib/config";
 
-export const stripe = new Stripe(config.stripe.secretKey, {
-  apiVersion: "2026-04-22.dahlia",
-  typescript: true,
-});
+let _stripe: Stripe | undefined;
+
+function getStripe(): Stripe {
+  if (!_stripe) {
+    _stripe = new Stripe(config.stripe.secretKey, {
+      apiVersion: "2026-04-22.dahlia",
+      typescript: true,
+    });
+  }
+  return _stripe;
+}
 
 export const PLANS = {
   starter: {
@@ -31,7 +38,7 @@ export async function createCheckoutSession(params: {
   userId: string;
   email: string;
 }): Promise<Stripe.Checkout.Session> {
-  return stripe.checkout.sessions.create({
+  return getStripe().checkout.sessions.create({
     customer: params.customerId,
     mode: "subscription",
     payment_method_types: ["card"],
@@ -58,7 +65,7 @@ export async function createCheckoutSession(params: {
 export async function createBillingPortalSession(params: {
   customerId: string;
 }): Promise<Stripe.BillingPortal.Session> {
-  return stripe.billingPortal.sessions.create({
+  return getStripe().billingPortal.sessions.create({
     customer: params.customerId,
     return_url: `${config.app.url}/dashboard/settings/billing`,
   });
@@ -70,13 +77,13 @@ export async function createOrRetrieveCustomer(params: {
   existingCustomerId?: string | null;
 }): Promise<Stripe.Customer> {
   if (params.existingCustomerId) {
-    const customer = await stripe.customers.retrieve(params.existingCustomerId);
+    const customer = await getStripe().customers.retrieve(params.existingCustomerId);
     if (!customer.deleted) {
       return customer;
     }
   }
 
-  return stripe.customers.create({
+  return getStripe().customers.create({
     email: params.email,
     metadata: {
       userId: params.userId,
@@ -85,23 +92,23 @@ export async function createOrRetrieveCustomer(params: {
 }
 
 export async function getSubscription(subscriptionId: string): Promise<Stripe.Subscription> {
-  return stripe.subscriptions.retrieve(subscriptionId);
+  return getStripe().subscriptions.retrieve(subscriptionId);
 }
 
 export async function cancelSubscription(subscriptionId: string): Promise<Stripe.Subscription> {
-  return stripe.subscriptions.update(subscriptionId, {
+  return getStripe().subscriptions.update(subscriptionId, {
     cancel_at_period_end: true,
   });
 }
 
 export async function reactivateSubscription(subscriptionId: string): Promise<Stripe.Subscription> {
-  return stripe.subscriptions.update(subscriptionId, {
+  return getStripe().subscriptions.update(subscriptionId, {
     cancel_at_period_end: false,
   });
 }
 
 export function constructWebhookEvent(payload: string | Buffer, signature: string): Stripe.Event {
-  return stripe.webhooks.constructEvent(
+  return getStripe().webhooks.constructEvent(
     payload,
     signature,
     config.stripe.webhookSecret
