@@ -6,7 +6,7 @@ import { MetricCard } from "@/components/dashboard/metric-card";
 import { DeadlineRow } from "@/components/dashboard/deadline-row";
 import { ActivityRow } from "@/components/dashboard/activity-row";
 import { formatCurrency } from "@/lib/format";
-import { createAuthenticatedFetch } from "@/lib/auth/authenticated-fetch";
+import { createServerApiClient } from "@/lib/auth/server-api-client";
 import { computeDashboardMetrics } from "@/lib/dashboard/metrics";
 import type { DashboardDeal, DashboardDeliverable, DashboardPayment } from "@/types/dashboard";
 
@@ -33,7 +33,7 @@ function getRecentActivity(payments: DashboardPayment[]) {
 export default async function DashboardPage() {
   await requireAuth();
 
-  const client = createAuthenticatedFetch();
+  const client = createServerApiClient();
 
   const [dealsRes, deliverablesRes, paymentsRes] = await Promise.all([
     client.get<{ deals: DashboardDeal[] }>("/api/deals"),

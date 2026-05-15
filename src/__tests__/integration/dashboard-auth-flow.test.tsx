@@ -5,14 +5,20 @@ vi.mock("@/lib/auth/guard", () => ({
   requireAuth: vi.fn(),
 }));
 
-vi.mock("@/lib/api-client", () => ({
-  apiFetch: vi.fn(),
-  ApiError: class ApiError extends Error {
+const mockGet = vi.fn();
+vi.mock("@/lib/auth/server-api-client", () => ({
+  createServerApiClient: () => ({
+    get: mockGet,
+    post: vi.fn(),
+    put: vi.fn(),
+    delete: vi.fn(),
+  }),
+  ServerApiError: class ServerApiError extends Error {
     status: number;
     body: Record<string, unknown>;
     constructor(status: number, message: string, body: Record<string, unknown> = {}) {
       super(message);
-      this.name = "ApiError";
+      this.name = "ServerApiError";
       this.status = status;
       this.body = body;
     }
@@ -20,7 +26,6 @@ vi.mock("@/lib/api-client", () => ({
 }));
 
 import { requireAuth } from "@/lib/auth/guard";
-import { apiFetch } from "@/lib/api-client";
 
 const mockSession = { user: { id: "user-1", email: "test@test.com", name: "Test User" } };
 
@@ -35,7 +40,7 @@ function setAuth(session: typeof mockSession | null) {
 }
 
 function mockApiFetch(deals: any[] = [], deliverables: any[] = [], payments: any[] = []) {
-  (apiFetch as ReturnType<typeof vi.fn>).mockImplementation((url: string) => {
+  mockGet.mockImplementation((url: string) => {
     if (url === "/api/deals") return Promise.resolve({ deals });
     if (url === "/api/deliverables") return Promise.resolve({ deliverables });
     if (url === "/api/payments") return Promise.resolve({ payments });
@@ -71,7 +76,7 @@ describe("Dashboard auth flow - server-side redirect", () => {
     const { default: DashboardPage } = await import("@/app/(dashboard)/page");
 
     await expect(DashboardPage()).rejects.toThrow("NEXT_REDIRECT");
-    expect(apiFetch).not.toHaveBeenCalled();
+    expect(mockGet).not.toHaveBeenCalled();
   });
 
   it("does not redirect when authenticated", async () => {
@@ -92,9 +97,9 @@ describe("Dashboard auth flow - server-side data fetching", () => {
 
     await DashboardPage();
 
-    expect(apiFetch).toHaveBeenCalledWith("/api/deals", expect.objectContaining({ method: "GET" }));
-    expect(apiFetch).toHaveBeenCalledWith("/api/deliverables", expect.objectContaining({ method: "GET" }));
-    expect(apiFetch).toHaveBeenCalledWith("/api/payments", expect.objectContaining({ method: "GET" }));
+    expect(mockGet).toHaveBeenCalledWith("/api/deals");
+    expect(mockGet).toHaveBeenCalledWith("/api/deliverables");
+    expect(mockGet).toHaveBeenCalledWith("/api/payments");
   });
 
   it("renders dashboard content after successful data fetch", async () => {
@@ -131,7 +136,7 @@ describe("Dashboard auth flow - server-side data fetching", () => {
 describe("Dashboard auth flow - error propagation", () => {
   it("propagates API errors from deals endpoint", async () => {
     setAuth(mockSession);
-    (apiFetch as ReturnType<typeof vi.fn>).mockImplementation((url: string) => {
+    mockGet.mockImplementation((url: string) => {
       if (url === "/api/deals") return Promise.reject(new Error("Database connection failed"));
       if (url === "/api/deliverables") return Promise.resolve({ deliverables: [] });
       if (url === "/api/payments") return Promise.resolve({ payments: [] });
@@ -144,7 +149,7 @@ describe("Dashboard auth flow - error propagation", () => {
 
   it("propagates API errors from deliverables endpoint", async () => {
     setAuth(mockSession);
-    (apiFetch as ReturnType<typeof vi.fn>).mockImplementation((url: string) => {
+    mockGet.mockImplementation((url: string) => {
       if (url === "/api/deals") return Promise.resolve({ deals: [] });
       if (url === "/api/deliverables") return Promise.reject(new Error("Deliverables lookup failed"));
       if (url === "/api/payments") return Promise.resolve({ payments: [] });
@@ -157,7 +162,7 @@ describe("Dashboard auth flow - error propagation", () => {
 
   it("propagates API errors from payments endpoint", async () => {
     setAuth(mockSession);
-    (apiFetch as ReturnType<typeof vi.fn>).mockImplementation((url: string) => {
+    mockGet.mockImplementation((url: string) => {
       if (url === "/api/deals") return Promise.resolve({ deals: [] });
       if (url === "/api/deliverables") return Promise.resolve({ deliverables: [] });
       if (url === "/api/payments") return Promise.reject(new Error("Payments query failed"));
@@ -176,7 +181,7 @@ describe("Dashboard auth flow - session validation", () => {
 
     await expect(DashboardPage()).rejects.toThrow("NEXT_REDIRECT");
     expect(requireAuth).toHaveBeenCalled();
-    expect(apiFetch).not.toHaveBeenCalled();
+    expect(mockGet).not.toHaveBeenCalled();
   });
 
   it("makes API calls with valid session user id", async () => {
@@ -185,7 +190,7 @@ describe("Dashboard auth flow - session validation", () => {
     const { default: DashboardPage } = await import("@/app/(dashboard)/page");
 
     await DashboardPage();
-    expect(apiFetch).toHaveBeenCalledTimes(3);
+    expect(mockGet).toHaveBeenCalledTimes(3);
   });
 
   it("handles session with only user id", async () => {
@@ -195,6 +200,6 @@ describe("Dashboard auth flow - session validation", () => {
 
     const result = await DashboardPage();
     expect(result).toBeDefined();
-    expect(apiFetch).toHaveBeenCalled();
+    expect(mockGet).toHaveBeenCalled();
   });
 });
