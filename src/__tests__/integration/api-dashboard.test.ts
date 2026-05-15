@@ -384,15 +384,12 @@ describe("GET /api/dashboard - session validation edge cases", () => {
     expect(body.error).toBe("Unauthorized");
   });
 
-  it("passes auth check with whitespace id (truthy) and queries database", async () => {
+  it("rejects whitespace-only id as unauthenticated", async () => {
     mockAuth({ user: { id: "  ", email: "test@test.com" } } as any);
-    (getDealsByUserId as ReturnType<typeof vi.fn>).mockResolvedValue([]);
-    (getDeliverablesByUserId as ReturnType<typeof vi.fn>).mockResolvedValue([]);
-    (getPaymentsByUserId as ReturnType<typeof vi.fn>).mockResolvedValue([]);
-
     const response = await GET();
-    expect(response.status).toBe(200);
-    expect(getDealsByUserId).toHaveBeenCalledWith("  ");
+    expect(response.status).toBe(401);
+    const body = await response.json();
+    expect(body.error).toBe("Unauthorized");
   });
 
   it("returns 401 when session user is undefined", async () => {
@@ -407,9 +404,10 @@ describe("GET /api/dashboard - session validation edge cases", () => {
     expect(response.status).toBe(401);
   });
 
-  it("does not query database when session user id is falsy", async () => {
+  it("returns 401 when session user id is non-string", async () => {
     mockAuth({ user: { id: 0 } } as any);
-    await GET();
+    const response = await GET();
+    expect(response.status).toBe(401);
     expect(getDealsByUserId).not.toHaveBeenCalled();
     expect(getDeliverablesByUserId).not.toHaveBeenCalled();
     expect(getPaymentsByUserId).not.toHaveBeenCalled();
