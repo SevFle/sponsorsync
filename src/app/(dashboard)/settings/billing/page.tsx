@@ -2,6 +2,7 @@ import { getAuthenticatedSession } from "@/lib/auth/guard";
 import { getUserWithBilling } from "@/lib/db/queries/billing";
 import { PLANS, type PlanId } from "@/lib/stripe";
 import { PageHeader } from "@/components/ui/page-header";
+import { BillingActions } from "@/components/settings/billing-actions";
 import { redirect } from "next/navigation";
 
 function getPlanFromPriceId(priceId: string | null): PlanId | null {
@@ -54,57 +55,33 @@ export default async function BillingPage() {
                 </p>
               )}
               <div className="mt-4 flex gap-3">
-                {user?.stripeCustomerId && (
-                  <form action="/api/billing/portal" method="POST">
-                    <button
-                      type="submit"
-                      className="rounded-md bg-black px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-gray-800"
-                    >
-                      Manage Billing
-                    </button>
-                  </form>
-                )}
+                <BillingActions
+                  plans={PLANS}
+                  hasCustomerId={!!user?.stripeCustomerId}
+                  isActive={isActive}
+                />
               </div>
             </div>
           ) : (
-            <div className="mt-4">
-              <p className="text-gray-600">
-                {isCanceled
-                  ? "Your subscription has been canceled."
-                  : "You are on the free plan."}
-              </p>
-            </div>
+            <>
+              <div className="mt-4">
+                <p className="text-gray-600">
+                  {isCanceled
+                    ? "Your subscription has been canceled."
+                    : "You are on the free plan."}
+                </p>
+              </div>
+              <div className="mt-6">
+                <h2 className="mb-4 text-lg font-semibold">Upgrade Your Plan</h2>
+                <BillingActions
+                  plans={PLANS}
+                  hasCustomerId={!!user?.stripeCustomerId}
+                  isActive={isActive}
+                />
+              </div>
+            </>
           )}
         </div>
-
-        {!isActive && (
-          <div>
-            <h2 className="mb-4 text-lg font-semibold">Upgrade Your Plan</h2>
-            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-              {Object.entries(PLANS).map(([id, plan]) => (
-                <div
-                  key={id}
-                  className="rounded-lg border p-6 transition-shadow hover:shadow-md"
-                >
-                  <h3 className="text-lg font-semibold">{plan.name}</h3>
-                  <p className="mt-2 text-2xl font-bold">
-                    {formatAmount(plan.amount)}
-                    <span className="text-sm font-normal text-gray-500">/month</span>
-                  </p>
-                  <form action="/api/billing/checkout" method="POST" className="mt-4">
-                    <input type="hidden" name="planId" value={id} />
-                    <button
-                      type="submit"
-                      className="w-full rounded-md bg-black px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-gray-800"
-                    >
-                      Subscribe to {plan.name}
-                    </button>
-                  </form>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
       </div>
     </div>
   );

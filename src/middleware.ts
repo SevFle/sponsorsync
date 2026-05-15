@@ -14,6 +14,7 @@ const PUBLIC_PATHS = [
   "/api/webhooks",
   "/api/health",
   "/api/billing",
+  "/api/ical",
 ];
 
 const SUBSCRIPTION_ALLOWED_PATHS = [
@@ -52,6 +53,11 @@ export function middleware(request: NextRequest) {
   }
 
   if (pathname.startsWith("/api/")) {
+    const sessionToken = getSessionToken(request);
+    if (!sessionToken) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
     if (isMutatingMethod(request.method)) {
       const cookieToken = request.cookies.get(CSRF_COOKIE_NAME)?.value;
       const headerToken = request.headers.get(CSRF_HEADER_NAME) ?? undefined;
