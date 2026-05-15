@@ -1,14 +1,13 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { useSession } from "next-auth/react";
-import { useRouter } from "next/navigation";
 import { PageHeader } from "@/components/ui/page-header";
 import { SponsorCard, type SponsorCardSponsor } from "@/components/ui/sponsor-card";
 import { EmptyState } from "@/components/ui/empty-state";
 import { SponsorCardSkeleton } from "@/components/ui/skeleton";
 import { apiFetch } from "@/lib/api-client";
 import { cn } from "@/lib/utils";
+import { useAuth } from "@/hooks/use-auth";
 
 type SortOption =
   | "name-asc"
@@ -62,8 +61,7 @@ function sortSponsors(sponsors: SponsorCardSponsor[], sort: SortOption): Sponsor
 }
 
 export default function SponsorsPage() {
-  const { status: sessionStatus } = useSession();
-  const router = useRouter();
+  const { isAuthenticated } = useAuth();
 
   const [sponsors, setSponsors] = useState<SponsorCardSponsor[]>([]);
   const [loading, setLoading] = useState(true);
@@ -86,16 +84,12 @@ export default function SponsorsPage() {
   }, []);
 
   useEffect(() => {
-    if (sessionStatus === "unauthenticated") {
-      router.replace("/login");
-      return;
-    }
-    if (sessionStatus !== "authenticated") return;
+    if (!isAuthenticated) return;
 
     const controller = new AbortController();
     fetchSponsors(controller.signal);
     return () => controller.abort();
-  }, [fetchSponsors, sessionStatus, router]);
+  }, [fetchSponsors, isAuthenticated]);
 
   const query = search.toLowerCase();
   const filteredSponsors = sponsors.filter((sponsor) => {
@@ -111,7 +105,7 @@ export default function SponsorsPage() {
   const sortedFilteredSponsors = sortSponsors(filteredSponsors, sort);
   const hasFilters = search !== "";
 
-  if (sessionStatus !== "authenticated") {
+  if (!isAuthenticated) {
     return null;
   }
 
