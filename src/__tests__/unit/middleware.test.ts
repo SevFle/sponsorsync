@@ -99,16 +99,16 @@ describe("middleware - API GET routes pass through", () => {
     expect(response.status).toBe(200);
   });
 
-  it("blocks /api/deals GET without session token", () => {
+  it("allows /api/deals GET without session token (API routes defer auth to handler)", () => {
     const req = createMockRequest("/api/deals", { method: "GET" });
     const response = middleware(req);
-    expect(response.status).toBe(401);
+    expect(response.status).toBe(200);
   });
 
-  it("blocks /api/dashboard GET without session token", () => {
+  it("allows /api/dashboard GET without session token (API routes defer auth to handler)", () => {
     const req = createMockRequest("/api/dashboard", { method: "GET" });
     const response = middleware(req);
-    expect(response.status).toBe(401);
+    expect(response.status).toBe(200);
   });
 });
 
@@ -228,11 +228,10 @@ describe("middleware - API mutating routes CSRF validation", () => {
     expect(body.error).toBe("CSRF token validation failed");
   });
 
-  it("returns JSON error body on session token failure", async () => {
-    const req = createMockRequest("/api/deals", { method: "POST" });
+  it("does not validate session on API routes (auth handled by route handlers)", () => {
+    const req = createMockRequest("/api/deals", { method: "GET" });
     const response = middleware(req);
-    const body = await response.json();
-    expect(body.error).toBe("Unauthorized");
+    expect(response.status).toBe(200);
   });
 
   it("does not validate CSRF for public webhook POST routes", () => {

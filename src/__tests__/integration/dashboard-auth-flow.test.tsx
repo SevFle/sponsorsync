@@ -136,6 +136,37 @@ describe("Dashboard auth flow - error propagation", () => {
       if (url === "/api/deliverables") return Promise.resolve({ deliverables: [] });
       if (url === "/api/payments") return Promise.resolve({ payments: [] });
       return Promise.resolve({});
+    });
+    const { default: DashboardPage } = await import("@/app/(dashboard)/page");
+
+    await expect(DashboardPage()).rejects.toThrow("Database connection failed");
+  });
+
+  it("propagates API errors from deliverables endpoint", async () => {
+    setAuth(mockSession);
+    (apiFetch as ReturnType<typeof vi.fn>).mockImplementation((url: string) => {
+      if (url === "/api/deals") return Promise.resolve({ deals: [] });
+      if (url === "/api/deliverables") return Promise.reject(new Error("Deliverables lookup failed"));
+      if (url === "/api/payments") return Promise.resolve({ payments: [] });
+      return Promise.resolve({});
+    });
+    const { default: DashboardPage } = await import("@/app/(dashboard)/page");
+
+    await expect(DashboardPage()).rejects.toThrow("Deliverables lookup failed");
+  });
+
+  it("propagates API errors from payments endpoint", async () => {
+    setAuth(mockSession);
+    (apiFetch as ReturnType<typeof vi.fn>).mockImplementation((url: string) => {
+      if (url === "/api/deals") return Promise.resolve({ deals: [] });
+      if (url === "/api/deliverables") return Promise.resolve({ deliverables: [] });
+      if (url === "/api/payments") return Promise.reject(new Error("Payments query failed"));
+      return Promise.resolve({});
+    });
+    const { default: DashboardPage } = await import("@/app/(dashboard)/page");
+
+    await expect(DashboardPage()).rejects.toThrow("Payments query failed");
+  });
 });
 
 describe("Dashboard auth flow - session validation", () => {
