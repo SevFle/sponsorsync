@@ -28,12 +28,11 @@ const COLORS = {
 };
 
 export interface EmailLayoutProps {
-  children: React.ReactNode;
   preview: string;
   creatorShow?: string;
 }
 
-export function EmailLayout({ children, preview, creatorShow }: EmailLayoutProps) {
+export function EmailLayout({ children, preview, creatorShow }: React.PropsWithChildren<EmailLayoutProps>) {
   return (
     <Html lang="en" dir="ltr">
       <Head>

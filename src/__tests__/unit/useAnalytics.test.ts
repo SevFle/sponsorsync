@@ -155,3 +155,66 @@ describe("useAnalytics - refetch", () => {
     expect(mockApiFetch).toHaveBeenCalledTimes(4);
   });
 });
+
+describe("useAnalytics - auth gating via enabled parameter", () => {
+  it("does not fetch when enabled is false", () => {
+    renderHook(() => useAnalytics("30d", false));
+
+    expect(mockApiFetch).not.toHaveBeenCalled();
+  });
+
+  it("fetches when enabled is true", async () => {
+    renderHook(() => useAnalytics("30d", true));
+
+    await waitFor(() => {
+      expect(mockApiFetch).toHaveBeenCalledTimes(4);
+    });
+  });
+
+  it("does not make API calls when auth is not confirmed", () => {
+    renderHook(() => useAnalytics("30d", false));
+
+    expect(mockApiFetch).not.toHaveBeenCalled();
+  });
+
+  it("starts fetching when enabled changes from false to true", async () => {
+    const { rerender } = renderHook(
+      ({ enabled }: { enabled: boolean }) => useAnalytics("30d", enabled),
+      { initialProps: { enabled: false } }
+    );
+
+    expect(mockApiFetch).not.toHaveBeenCalled();
+
+    rerender({ enabled: true });
+
+    await waitFor(() => {
+      expect(mockApiFetch).toHaveBeenCalledTimes(4);
+    });
+  });
+
+  it("does not fetch while auth is loading", () => {
+    renderHook(() => useAnalytics("30d", false));
+
+    expect(mockApiFetch).not.toHaveBeenCalled();
+    expect(mockApiFetch).not.toHaveBeenCalledWith(
+      expect.stringContaining("/api/analytics/revenue")
+    );
+  });
+
+  it("preserves data when enabled changes to false after fetch", async () => {
+    const { result, rerender } = renderHook(
+      ({ enabled }: { enabled: boolean }) => useAnalytics("30d", enabled),
+      { initialProps: { enabled: true } }
+    );
+
+    await waitFor(() => {
+      expect(result.current.isLoading).toBe(false);
+    });
+
+    expect(result.current.revenue).toEqual(mockRevenue);
+
+    rerender({ enabled: false });
+
+    expect(result.current.revenue).toEqual(mockRevenue);
+  });
+});

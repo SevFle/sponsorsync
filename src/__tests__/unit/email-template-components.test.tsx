@@ -274,28 +274,28 @@ describe("PaymentFollowupEmail", () => {
 describe("EmailLayout", () => {
   it("renders children", async () => {
     const html = await render(
-      React.createElement(EmailLayout, { preview: "Test preview", children: React.createElement("div", null, "Hello World") })
+      React.createElement(EmailLayout, { preview: "Test preview" }, React.createElement("div", null, "Hello World"))
     );
     expect(html).toContain("Hello World");
   });
 
   it("includes creator show name in header", async () => {
     const html = await render(
-      React.createElement(EmailLayout, { preview: "Test", creatorShow: "My Amazing Show", children: React.createElement("div", null) })
+      React.createElement(EmailLayout, { preview: "Test", creatorShow: "My Amazing Show" }, React.createElement("div", null))
     );
     expect(html).toContain("My Amazing Show");
   });
 
   it("defaults to SponsorSync when no show name", async () => {
     const html = await render(
-      React.createElement(EmailLayout, { preview: "Test", children: React.createElement("div", null) })
+      React.createElement(EmailLayout, { preview: "Test" }, React.createElement("div", null))
     );
     expect(html).toContain("SponsorSync");
   });
 
   it("includes SponsorSync footer link", async () => {
     const html = await render(
-      React.createElement(EmailLayout, { preview: "Test", children: React.createElement("div", null) })
+      React.createElement(EmailLayout, { preview: "Test" }, React.createElement("div", null))
     );
     expect(html).toContain("sponsorsync.app");
   });
