@@ -108,30 +108,73 @@ function sortPayments(payments: Payment[], sort: SortOption): Payment[] {
   return sorted;
 }
 
-function PaymentRow({ payment }: { payment: Payment }) {
+function PaymentRow({ payment, onStatusChange }: { payment: Payment; onStatusChange: (id: string, status: PaymentStatus) => void }) {
+  const [expanded, setExpanded] = useState(false);
+
   return (
-    <div className="flex items-center gap-4 rounded-lg border border-gray-200 bg-gray-50 px-4 py-3 transition-colors hover:bg-gray-100">
-      <div className="min-w-0 flex-1">
-        <div className="flex items-center gap-2">
-          <p className="truncate text-sm font-semibold text-gray-900">
-            {payment.sponsorName}
-          </p>
-          <PaymentStatusBadge status={payment.status} />
+    <div className="rounded-lg border border-gray-200 bg-gray-50 transition-colors hover:bg-gray-100">
+      <button
+        type="button"
+        className="flex w-full items-center gap-4 px-4 py-3 text-left"
+        onClick={() => setExpanded((e) => !e)}
+      >
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-2">
+            <p className="truncate text-sm font-semibold text-gray-900">
+              {payment.sponsorName}
+            </p>
+            <PaymentStatusBadge status={payment.status} />
+          </div>
+          <p className="truncate text-xs text-gray-500">{payment.dealTitle}</p>
         </div>
-        <p className="truncate text-xs text-gray-500">{payment.dealTitle}</p>
-      </div>
-      <div className="shrink-0 text-right">
-        <p className="text-sm font-bold text-gray-900">
-          {formatCurrency(payment.amount, payment.currency)}
-        </p>
-        <p className="text-xs text-gray-500">
-          {payment.paidDate
-            ? `Paid ${format(new Date(payment.paidDate), "MMM d, yyyy")}`
-            : payment.dueDate
-              ? `Due ${format(new Date(payment.dueDate), "MMM d, yyyy")}`
-              : "No due date"}
-        </p>
-      </div>
+        <div className="shrink-0 text-right">
+          <p className="text-sm font-bold text-gray-900">
+            {formatCurrency(payment.amount, payment.currency)}
+          </p>
+          <p className="text-xs text-gray-500">
+            {payment.paidDate
+              ? `Paid ${format(new Date(payment.paidDate), "MMM d, yyyy")}`
+              : payment.dueDate
+                ? `Due ${format(new Date(payment.dueDate), "MMM d, yyyy")}`
+                : "No due date"}
+          </p>
+        </div>
+      </button>
+      {expanded && (
+        <div className="border-t border-gray-200 px-4 py-3 text-sm">
+          <p className="text-gray-600">
+            <span className="font-medium">Deal:</span> {payment.dealTitle}
+          </p>
+          {payment.notes && (
+            <p className="mt-1 text-gray-500">{payment.notes}</p>
+          )}
+          {payment.status === "pending" && (
+            <div className="mt-2 flex gap-2">
+              <button
+                type="button"
+                className="rounded-md bg-green-600 px-3 py-1 text-xs font-medium text-white hover:bg-green-700"
+                onClick={() => onStatusChange(payment.id, "paid")}
+              >
+                Mark Paid
+              </button>
+              <button
+                type="button"
+                className="rounded-md bg-red-600 px-3 py-1 text-xs font-medium text-white hover:bg-red-700"
+                onClick={() => onStatusChange(payment.id, "overdue")}
+              >
+                Mark Overdue
+              </button>
+              <button
+                type="button"
+                className="rounded-md bg-gray-600 px-3 py-1 text-xs font-medium text-white hover:bg-gray-700"
+                onClick={() => onStatusChange(payment.id, "cancelled")}
+              >
+                Cancel Payment
+              </button>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }
@@ -374,6 +417,28 @@ export default function PaymentsPage() {
   const sortedFilteredPayments = sortPayments(filteredPayments, sort);
   const hasFilters = search !== "" || activeTab !== "all" || startDate !== "" || endDate !== "";
 
+  const totalPaid = payments
+    .filter((p) => p.status === "paid")
+    .reduce((sum, p) => sum + p.amount, 0);
+  const totalOutstanding = payments
+    .filter((p) => p.status === "pending")
+    .reduce((sum, p) => sum + p.amount, 0);
+  const totalOverdue = payments
+    .filter((p) => p.status === "overdue")
+    .reduce((sum, p) => sum + p.amount, 0);
+
+  const handleStatusChange = useCallback(async (id: string, newStatus: PaymentStatus) => {
+    try {
+      await apiFetch(`/api/payments/${id}`, {
+        method: "PATCH",
+        body: JSON.stringify({ status: newStatus }),
+      });
+      fetchData();
+    } catch {
+      // error handled silently
+    }
+  }, [fetchData]);
+
   if (sessionStatus !== "authenticated") {
     return null;
   }
@@ -446,6 +511,21 @@ export default function PaymentsPage() {
         ))}
       </div>
 
+      <div className="mt-4 grid grid-cols-3 gap-4">
+        <div className="rounded-lg border border-gray-200 bg-white p-4">
+          <p className="text-xs font-medium text-gray-500">Total Paid</p>
+          <p className="mt-1 text-lg font-bold text-gray-900">{formatCurrency(totalPaid, "USD")}</p>
+        </div>
+        <div className="rounded-lg border border-gray-200 bg-white p-4">
+          <p className="text-xs font-medium text-gray-500">Outstanding</p>
+          <p className="mt-1 text-lg font-bold text-gray-900">{formatCurrency(totalOutstanding, "USD")}</p>
+        </div>
+        <div className="rounded-lg border border-gray-200 bg-white p-4">
+          <p className="text-xs font-medium text-gray-500">Overdue</p>
+          <p className="mt-1 text-lg font-bold text-gray-900">{formatCurrency(totalOverdue, "USD")}</p>
+        </div>
+      </div>
+
       <div className="mt-6 space-y-3">
         {loading ? (
           <PaymentsSkeleton />
@@ -470,7 +550,7 @@ export default function PaymentsPage() {
           />
         ) : (
           sortedFilteredPayments.map((payment) => (
-            <PaymentRow key={payment.id} payment={payment} />
+            <PaymentRow key={payment.id} payment={payment} onStatusChange={handleStatusChange} />
           ))
         )}
       </div>

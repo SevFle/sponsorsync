@@ -136,6 +136,12 @@ describe("Dashboard auth flow - error propagation", () => {
       if (url === "/api/deliverables") return Promise.resolve({ deliverables: [] });
       if (url === "/api/payments") return Promise.resolve({ payments: [] });
       return Promise.resolve({});
+    });
+
+    const { default: DashboardPage } = await import("@/app/(dashboard)/page");
+
+    await expect(DashboardPage()).rejects.toThrow("Database connection failed");
+  });
 });
 
 describe("Dashboard auth flow - session validation", () => {
