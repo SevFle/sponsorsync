@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
+import { getToken } from "next-auth/jwt";
 import {
   CSRF_COOKIE_NAME,
   CSRF_HEADER_NAME,
@@ -8,31 +9,26 @@ import {
   isMutatingMethod,
 } from "@/lib/security/csrf";
 
-const PUBLIC_PATHS = [
+const PUBLIC_PAGE_PATHS = [
   "/login",
   "/api/auth",
   "/api/webhooks",
   "/api/health",
-  "/api/billing",
 ];
 
-const SUBSCRIPTION_ALLOWED_PATHS = [
-  "/dashboard/settings/billing",
+const PUBLIC_API_PATHS = [
+  "/api/auth",
+  "/api/webhooks",
+  "/api/health",
+  "/api/ical",
 ];
 
-function isPublicPath(pathname: string): boolean {
-  return PUBLIC_PATHS.some((p) => pathname.startsWith(p));
+function isPublicPagePath(pathname: string): boolean {
+  return PUBLIC_PAGE_PATHS.some((p) => pathname.startsWith(p));
 }
 
-function isSubscriptionAllowedPath(pathname: string): boolean {
-  return SUBSCRIPTION_ALLOWED_PATHS.some((p) => pathname.startsWith(p));
-}
-
-function getSessionToken(request: NextRequest): string | undefined {
-  return (
-    request.cookies.get("next-auth.session-token")?.value ??
-    request.cookies.get("__Secure-next-auth.session-token")?.value
-  );
+function isPublicApiPath(pathname: string): boolean {
+  return PUBLIC_API_PATHS.some((p) => pathname.startsWith(p));
 }
 
 function setCsrfCookie(response: NextResponse, token: string): void {
@@ -44,14 +40,24 @@ function setCsrfCookie(response: NextResponse, token: string): void {
   });
 }
 
-export function middleware(request: NextRequest) {
+export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
-  if (isPublicPath(pathname)) {
+  if (isPublicPagePath(pathname)) {
     return NextResponse.next();
   }
 
+  const token = await getToken({ req: request });
+
   if (pathname.startsWith("/api/")) {
+    if (isPublicApiPath(pathname)) {
+      return NextResponse.next();
+    }
+
+    if (!token) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
     if (isMutatingMethod(request.method)) {
       const cookieToken = request.cookies.get(CSRF_COOKIE_NAME)?.value;
       const headerToken = request.headers.get(CSRF_HEADER_NAME) ?? undefined;
@@ -60,24 +66,14 @@ export function middleware(request: NextRequest) {
         return NextResponse.json({ error: "CSRF token validation failed" }, { status: 403 });
       }
     }
+
     return NextResponse.next();
   }
-
-  const token = getSessionToken(request);
 
   if (!token) {
     const loginUrl = new URL("/login", request.url);
     loginUrl.searchParams.set("callbackUrl", pathname);
     return NextResponse.redirect(loginUrl);
-  }
-
-  if (isSubscriptionAllowedPath(pathname)) {
-    const response = NextResponse.next();
-    const existingCsrf = request.cookies.get(CSRF_COOKIE_NAME)?.value;
-    if (!existingCsrf) {
-      setCsrfCookie(response, generateCsrfToken());
-    }
-    return response;
   }
 
   const response = NextResponse.next();

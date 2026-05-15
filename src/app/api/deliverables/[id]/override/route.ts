@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth/config";
+import { getAuthenticatedSession } from "@/lib/auth/guard";
 import { z } from "zod";
 import { verifyDeliverable, verifyBulkDeliverables, type DeliverableRow } from "@/lib/deliverables";
 import { computeEnhancedBulkVerification, type EpisodeData, type DeliverableRequirement } from "@/lib/verification";
@@ -16,8 +15,8 @@ const overrideSchema = z.object({
 });
 
 export async function POST(request: Request) {
-  const session = await getServerSession(authOptions);
-  if (!session?.user?.id) {
+  const session = await getAuthenticatedSession();
+  if (!session) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
