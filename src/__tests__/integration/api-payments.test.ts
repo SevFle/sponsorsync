@@ -11,10 +11,12 @@ vi.mock("@/lib/auth/config", () => ({
 
 vi.mock("@/lib/db/queries/payments", () => ({
   getPaymentsByUserId: vi.fn(),
+  createPayment: vi.fn(),
 }));
 
 vi.mock("@/lib/db/queries/deals", () => ({
   getDealsByUserId: vi.fn(),
+  getDealById: vi.fn(),
 }));
 
 vi.mock("@/lib/db/queries/sponsors", () => ({
@@ -22,8 +24,8 @@ vi.mock("@/lib/db/queries/sponsors", () => ({
 }));
 
 import { getServerSession } from "next-auth";
-import { getPaymentsByUserId } from "@/lib/db/queries/payments";
-import { getDealsByUserId } from "@/lib/db/queries/deals";
+import { getPaymentsByUserId, createPayment } from "@/lib/db/queries/payments";
+import { getDealsByUserId, getDealById } from "@/lib/db/queries/deals";
 import { getSponsorsByUserId } from "@/lib/db/queries/sponsors";
 
 const mockSession = { user: { id: "user-1", email: "test@test.com" } };
@@ -38,6 +40,8 @@ beforeEach(() => {
   (getPaymentsByUserId as ReturnType<typeof vi.fn>).mockResolvedValue([]);
   (getDealsByUserId as ReturnType<typeof vi.fn>).mockResolvedValue([]);
   (getSponsorsByUserId as ReturnType<typeof vi.fn>).mockResolvedValue([]);
+  (getDealById as ReturnType<typeof vi.fn>).mockResolvedValue(null);
+  (createPayment as ReturnType<typeof vi.fn>).mockResolvedValue({});
 });
 
 describe("GET /api/payments", () => {
@@ -397,9 +401,43 @@ describe("POST /api/payments", () => {
     expect(response.status).toBe(422);
   });
 
-  it("creates a payment and returns it with status 201", async () => {
+  it("returns 404 when deal does not belong to user", async () => {
+    (getDealById as ReturnType<typeof vi.fn>).mockResolvedValue(null);
+
     const paymentData = {
       dealId: "550e8400-e29b-41d4-a716-446655440000",
+      amount: 2500,
+      currency: "USD",
+    };
+    const request = new Request("http://localhost:3000/api/payments", {
+      method: "POST",
+      body: JSON.stringify(paymentData),
+      headers: { "Content-Type": "application/json" },
+    });
+
+    const response = await POST(request);
+    expect(response.status).toBe(404);
+    const body = await response.json();
+    expect(body.error).toBe("Deal not found or access denied");
+  });
+
+  it("creates a payment and returns it with status 201", async () => {
+    const dealId = "550e8400-e29b-41d4-a716-446655440000";
+    const mockDeal = { id: dealId, userId: "user-1", title: "Test Deal" };
+    const mockPayment = {
+      id: "pay-new",
+      dealId,
+      amount: 2500,
+      currency: "USD",
+      status: "pending",
+      dueDate: null,
+    };
+
+    (getDealById as ReturnType<typeof vi.fn>).mockResolvedValue(mockDeal);
+    (createPayment as ReturnType<typeof vi.fn>).mockResolvedValue(mockPayment);
+
+    const paymentData = {
+      dealId,
       amount: 2500,
       currency: "USD",
     };
@@ -413,12 +451,34 @@ describe("POST /api/payments", () => {
     const body = await response.json();
 
     expect(response.status).toBe(201);
-    expect(body.payment).toEqual(paymentData);
+    expect(body.payment).toEqual(mockPayment);
+    expect(getDealById).toHaveBeenCalledWith(dealId, "user-1");
+    expect(createPayment).toHaveBeenCalledWith({
+      dealId,
+      amount: 2500,
+      currency: "USD",
+      dueDate: null,
+      status: "pending",
+    });
   });
 
   it("creates a payment with all optional fields", async () => {
+    const dealId = "550e8400-e29b-41d4-a716-446655440000";
+    const mockDeal = { id: dealId, userId: "user-1" };
+    const mockPayment = {
+      id: "pay-new",
+      dealId,
+      amount: 5000,
+      currency: "EUR",
+      status: "pending",
+      dueDate: "2025-06-01",
+    };
+
+    (getDealById as ReturnType<typeof vi.fn>).mockResolvedValue(mockDeal);
+    (createPayment as ReturnType<typeof vi.fn>).mockResolvedValue(mockPayment);
+
     const paymentData = {
-      dealId: "550e8400-e29b-41d4-a716-446655440000",
+      dealId,
       amount: 5000,
       currency: "EUR",
       dueDate: "2025-06-01",
@@ -433,6 +493,50 @@ describe("POST /api/payments", () => {
     const body = await response.json();
 
     expect(response.status).toBe(201);
-    expect(body.payment).toEqual(paymentData);
+    expect(body.payment).toEqual(mockPayment);
+    expect(createPayment).toHaveBeenCalledWith({
+      dealId,
+      amount: 5000,
+      currency: "EUR",
+      dueDate: "2025-06-01",
+      status: "pending",
+    });
+  });
+
+  it("returns 500 when createPayment fails", async () => {
+    const dealId = "550e8400-e29b-41d4-a716-446655440000";
+    (getDealById as ReturnType<typeof vi.fn>).mockResolvedValue({ id: dealId });
+    (createPayment as ReturnType<typeof vi.fn>).mockRejectedValue(
+      new Error("DB error")
+    );
+
+    const request = new Request("http://localhost:3000/api/payments", {
+      method: "POST",
+      body: JSON.stringify({ dealId, amount: 2500 }),
+      headers: { "Content-Type": "application/json" },
+    });
+
+    const response = await POST(request);
+    expect(response.status).toBe(500);
+    const body = await response.json();
+    expect(body.error).toBe("Failed to create payment");
+  });
+
+  it("defaults currency to USD when not provided", async () => {
+    const dealId = "550e8400-e29b-41d4-a716-446655440000";
+    (getDealById as ReturnType<typeof vi.fn>).mockResolvedValue({ id: dealId });
+    (createPayment as ReturnType<typeof vi.fn>).mockResolvedValue({ id: "pay-1" });
+
+    const request = new Request("http://localhost:3000/api/payments", {
+      method: "POST",
+      body: JSON.stringify({ dealId, amount: 1000 }),
+      headers: { "Content-Type": "application/json" },
+    });
+
+    await POST(request);
+
+    expect(createPayment).toHaveBeenCalledWith(
+      expect.objectContaining({ currency: "USD" })
+    );
   });
 });
