@@ -85,3 +85,48 @@ export function PaymentStatusBadge({ status, className }: PaymentStatusBadgeProp
     </span>
   );
 }
+
+export type DeliverableStatus = "pending" | "in_progress" | "submitted" | "verified" | "missed";
+
+const deliverableStatusConfig: Record<DeliverableStatus, { label: string; className: string }> = {
+  pending: {
+    label: "Pending",
+    className: "bg-orange-100 text-orange-700",
+  },
+  in_progress: {
+    label: "In Progress",
+    className: "bg-blue-100 text-blue-700",
+  },
+  submitted: {
+    label: "Submitted",
+    className: "bg-purple-100 text-purple-700",
+  },
+  verified: {
+    label: "Verified",
+    className: "bg-green-100 text-green-700",
+  },
+  missed: {
+    label: "Missed",
+    className: "bg-red-100 text-red-700",
+  },
+};
+
+interface DeliverableStatusBadgeProps {
+  status: DeliverableStatus;
+  className?: string;
+}
+
+export function DeliverableStatusBadge({ status, className }: DeliverableStatusBadgeProps) {
+  const config = deliverableStatusConfig[status];
+  return (
+    <span
+      className={cn(
+        "inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium",
+        config.className,
+        className
+      )}
+    >
+      {config.label}
+    </span>
+  );
+}
