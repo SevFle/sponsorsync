@@ -15,12 +15,48 @@ vi.mock("@/lib/integrations/podcast/clients", () => ({
   })),
 }));
 
+const WEBHOOK_SECRET = "test-webhook-secret";
+
+async function computeSignature(payload: string): Promise<string> {
+  const key = await globalThis.crypto.subtle.importKey(
+    "raw",
+    new TextEncoder().encode(WEBHOOK_SECRET),
+    { name: "HMAC", hash: "SHA-256" },
+    false,
+    ["sign"]
+  );
+  const sig = await globalThis.crypto.subtle.sign(
+    "HMAC",
+    key,
+    new TextEncoder().encode(payload)
+  );
+  return Array.from(new Uint8Array(sig), (b) =>
+    b.toString(16).padStart(2, "0")
+  ).join("");
+}
+
+async function makeRequest(body: unknown, headers: Record<string, string> = {}) {
+  const rawBody = typeof body === "string" ? body : JSON.stringify(body);
+  const signature = await computeSignature(rawBody);
+  return new Request("http://localhost:3000/api/webhooks/podcast", {
+    method: "POST",
+    body: rawBody,
+    headers: {
+      "Content-Type": "application/json",
+      "x-webhook-signature": signature,
+      "x-platform": "buzzsprout",
+      ...headers,
+    },
+  });
+}
+
 beforeEach(() => {
   vi.clearAllMocks();
   delete process.env.BUZZSPROUT_API_KEY;
   delete process.env.TRANSISTOR_API_KEY;
   delete process.env.BUZZSPROUT_PODCAST_ID;
   (process.env as Record<string, string | undefined>).NODE_ENV = "test";
+  process.env.PODCAST_WEBHOOK_SECRET = WEBHOOK_SECRET;
 });
 
 afterEach(() => {
@@ -29,20 +65,8 @@ afterEach(() => {
   delete process.env.TRANSISTOR_API_KEY;
   delete process.env.BUZZSPROUT_PODCAST_ID;
   (process.env as Record<string, string | undefined>).NODE_ENV = "test";
+  delete process.env.PODCAST_WEBHOOK_SECRET;
 });
-
-function makeRequest(body: unknown, headers: Record<string, string> = {}) {
-  return new Request("http://localhost:3000/api/webhooks/podcast", {
-    method: "POST",
-    body: JSON.stringify(body),
-    headers: {
-      "Content-Type": "application/json",
-      "x-webhook-signature": "test-signature",
-      "x-platform": "buzzsprout",
-      ...headers,
-    },
-  });
-}
 
 describe("POST /api/webhooks/podcast – edge cases", () => {
   it("episode.deleted event skips enrichment even when API key is configured", async () => {
@@ -52,7 +76,7 @@ describe("POST /api/webhooks/podcast – edge cases", () => {
       episode: { id: 77, title: "Gone" },
     };
 
-    const response = await POST(makeRequest(payload));
+    const response = await POST(await makeRequest(payload));
     expect(response.status).toBe(200);
     expect(createPodcastClient).not.toHaveBeenCalled();
   });
@@ -65,7 +89,7 @@ describe("POST /api/webhooks/podcast – edge cases", () => {
       episode: { id: 1, title: "Prod Episode" },
     };
 
-    const response = await POST(makeRequest(payload));
+    const response = await POST(await makeRequest(payload));
     expect(response.status).toBe(200);
     expect(decrypt).toHaveBeenCalledWith("enc::cipherkey");
   });
@@ -76,7 +100,7 @@ describe("POST /api/webhooks/podcast – edge cases", () => {
       episode: { id: 5, title: "No Key" },
     };
 
-    const response = await POST(makeRequest(payload));
+    const response = await POST(await makeRequest(payload));
     expect(response.status).toBe(200);
     expect(createPodcastClient).not.toHaveBeenCalled();
   });
@@ -87,7 +111,7 @@ describe("POST /api/webhooks/podcast – edge cases", () => {
       episode: { id: 6, title: "No Key Update" },
     };
 
-    const response = await POST(makeRequest(payload));
+    const response = await POST(await makeRequest(payload));
     expect(response.status).toBe(200);
     expect(createPodcastClient).not.toHaveBeenCalled();
   });
@@ -103,7 +127,7 @@ describe("POST /api/webhooks/podcast – edge cases", () => {
     };
 
     const response = await POST(
-      makeRequest(payload, { "x-platform": "transistor" })
+      await makeRequest(payload, { "x-platform": "transistor" })
     );
     expect(response.status).toBe(200);
     expect(createPodcastClient).toHaveBeenCalledWith(
@@ -119,7 +143,7 @@ describe("POST /api/webhooks/podcast – edge cases", () => {
       episode: { id: 10, title: "No Date", published_at: null },
     };
 
-    const response = await POST(makeRequest(payload));
+    const response = await POST(await makeRequest(payload));
     const body = await response.json();
     const after = new Date().toISOString();
 
@@ -135,7 +159,7 @@ describe("POST /api/webhooks/podcast – edge cases", () => {
       episode: { id: 11, title: "No Date Field" },
     };
 
-    const response = await POST(makeRequest(payload));
+    const response = await POST(await makeRequest(payload));
     const body = await response.json();
     const after = new Date().toISOString();
 
@@ -155,7 +179,7 @@ describe("POST /api/webhooks/podcast – edge cases", () => {
     };
 
     const response = await POST(
-      makeRequest(payload, { "x-platform": "transistor" })
+      await makeRequest(payload, { "x-platform": "transistor" })
     );
     const body = await response.json();
     const after = new Date().toISOString();
@@ -176,7 +200,7 @@ describe("POST /api/webhooks/podcast – edge cases", () => {
     };
 
     const response = await POST(
-      makeRequest(payload, { "x-platform": "transistor" })
+      await makeRequest(payload, { "x-platform": "transistor" })
     );
     const body = await response.json();
     const after = new Date().toISOString();
@@ -196,7 +220,7 @@ describe("POST /api/webhooks/podcast – edge cases", () => {
     };
 
     const response = await POST(
-      makeRequest(payload, { "x-platform": "transistor" })
+      await makeRequest(payload, { "x-platform": "transistor" })
     );
     const body = await response.json();
 
@@ -221,7 +245,7 @@ describe("POST /api/webhooks/podcast – edge cases", () => {
       },
     };
 
-    const response = await POST(makeRequest(payload));
+    const response = await POST(await makeRequest(payload));
     const body = await response.json();
 
     expect(response.status).toBe(200);
@@ -248,7 +272,7 @@ describe("POST /api/webhooks/podcast – edge cases", () => {
     };
 
     const response = await POST(
-      makeRequest(payload, { "x-platform": "transistor" })
+      await makeRequest(payload, { "x-platform": "transistor" })
     );
     const body = await response.json();
 
@@ -265,7 +289,7 @@ describe("POST /api/webhooks/podcast – edge cases", () => {
       episode: { id: 123456789, title: "Coerce Me" },
     };
 
-    const response = await POST(makeRequest(payload));
+    const response = await POST(await makeRequest(payload));
     const body = await response.json();
 
     expect(response.status).toBe(200);
@@ -279,7 +303,7 @@ describe("POST /api/webhooks/podcast – edge cases", () => {
       episode: { id: 0, title: "Zero ID" },
     };
 
-    const response = await POST(makeRequest(payload));
+    const response = await POST(await makeRequest(payload));
     const body = await response.json();
 
     expect(response.status).toBe(200);
@@ -296,7 +320,7 @@ describe("POST /api/webhooks/podcast – edge cases", () => {
       },
     };
 
-    const response = await POST(makeRequest(payload));
+    const response = await POST(await makeRequest(payload));
     const body = await response.json();
 
     expect(response.status).toBe(200);
@@ -325,7 +349,7 @@ describe("POST /api/webhooks/podcast – edge cases", () => {
     };
 
     const response = await POST(
-      makeRequest(payload, { "x-platform": "transistor" })
+      await makeRequest(payload, { "x-platform": "transistor" })
     );
     const body = await response.json();
 
@@ -355,10 +379,10 @@ describe("POST /api/webhooks/podcast – edge cases", () => {
       },
     };
 
-    const response1 = await POST(makeRequest(first));
+    const response1 = await POST(await makeRequest(first));
     const body1 = await response1.json();
     const response2 = await POST(
-      makeRequest(second, { "x-platform": "transistor" })
+      await makeRequest(second, { "x-platform": "transistor" })
     );
     const body2 = await response2.json();
 
@@ -380,7 +404,7 @@ describe("POST /api/webhooks/podcast – edge cases", () => {
       episode: { id: 10, title: "With Key" },
     };
 
-    const response1 = await POST(makeRequest(first));
+    const response1 = await POST(await makeRequest(first));
     expect(response1.status).toBe(200);
     expect(createPodcastClient).toHaveBeenCalledTimes(1);
 
@@ -392,7 +416,7 @@ describe("POST /api/webhooks/podcast – edge cases", () => {
       episode: { id: 20, title: "Without Key" },
     };
 
-    const response2 = await POST(makeRequest(second));
+    const response2 = await POST(await makeRequest(second));
     expect(response2.status).toBe(200);
     expect(createPodcastClient).not.toHaveBeenCalled();
   });
@@ -405,7 +429,7 @@ describe("POST /api/webhooks/podcast – edge cases", () => {
       episode: { id: 55, title: "With Podcast ID" },
     };
 
-    const response = await POST(makeRequest(payload));
+    const response = await POST(await makeRequest(payload));
     expect(response.status).toBe(200);
     expect(createPodcastClient).toHaveBeenCalledWith(
       "buzzsprout",
@@ -424,7 +448,7 @@ describe("POST /api/webhooks/podcast – edge cases", () => {
       episode: { id: 3, title: "Dev Episode" },
     };
 
-    const response = await POST(makeRequest(payload));
+    const response = await POST(await makeRequest(payload));
     expect(response.status).toBe(200);
     expect(decrypt).not.toHaveBeenCalled();
     expect(createPodcastClient).toHaveBeenCalledWith(

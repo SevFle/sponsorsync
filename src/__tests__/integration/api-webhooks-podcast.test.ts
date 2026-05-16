@@ -13,11 +13,47 @@ vi.mock("@/lib/integrations/podcast/clients", () => ({
   })),
 }));
 
+const WEBHOOK_SECRET = "test-webhook-secret";
+
+async function computeSignature(payload: string): Promise<string> {
+  const key = await globalThis.crypto.subtle.importKey(
+    "raw",
+    new TextEncoder().encode(WEBHOOK_SECRET),
+    { name: "HMAC", hash: "SHA-256" },
+    false,
+    ["sign"]
+  );
+  const sig = await globalThis.crypto.subtle.sign(
+    "HMAC",
+    key,
+    new TextEncoder().encode(payload)
+  );
+  return Array.from(new Uint8Array(sig), (b) =>
+    b.toString(16).padStart(2, "0")
+  ).join("");
+}
+
+async function makeRequest(body: unknown, headers: Record<string, string> = {}) {
+  const rawBody = typeof body === "string" ? body : JSON.stringify(body);
+  const signature = await computeSignature(rawBody);
+  return new Request("http://localhost:3000/api/webhooks/podcast", {
+    method: "POST",
+    body: rawBody,
+    headers: {
+      "Content-Type": "application/json",
+      "x-webhook-signature": signature,
+      "x-platform": "buzzsprout",
+      ...headers,
+    },
+  });
+}
+
 beforeEach(() => {
   vi.clearAllMocks();
   delete process.env.BUZZSPROUT_API_KEY;
   delete process.env.TRANSISTOR_API_KEY;
   delete process.env.BUZZSPROUT_PODCAST_ID;
+  process.env.PODCAST_WEBHOOK_SECRET = WEBHOOK_SECRET;
 });
 
 afterEach(() => {
@@ -25,20 +61,8 @@ afterEach(() => {
   delete process.env.BUZZSPROUT_API_KEY;
   delete process.env.TRANSISTOR_API_KEY;
   delete process.env.BUZZSPROUT_PODCAST_ID;
+  delete process.env.PODCAST_WEBHOOK_SECRET;
 });
-
-function makeRequest(body: unknown, headers: Record<string, string> = {}) {
-  return new Request("http://localhost:3000/api/webhooks/podcast", {
-    method: "POST",
-    body: JSON.stringify(body),
-    headers: {
-      "Content-Type": "application/json",
-      "x-webhook-signature": "test-signature",
-      "x-platform": "buzzsprout",
-      ...headers,
-    },
-  });
-}
 
 describe("POST /api/webhooks/podcast", () => {
   it("returns 401 when webhook signature is missing", async () => {
@@ -55,13 +79,51 @@ describe("POST /api/webhooks/podcast", () => {
     expect(body.error).toBe("Missing webhook signature");
   });
 
-  it("returns 400 when x-platform header is missing", async () => {
+  it("returns 401 when webhook signature is invalid", async () => {
+    const request = new Request("http://localhost:3000/api/webhooks/podcast", {
+      method: "POST",
+      body: JSON.stringify({ event: "episode_published", episode: { id: 1, title: "Test" } }),
+      headers: {
+        "Content-Type": "application/json",
+        "x-webhook-signature": "tampered-signature-value",
+        "x-platform": "buzzsprout",
+      },
+    });
+
+    const response = await POST(request);
+    const body = await response.json();
+
+    expect(response.status).toBe(401);
+    expect(body.error).toBe("Invalid webhook signature");
+  });
+
+  it("returns 500 when PODCAST_WEBHOOK_SECRET is not configured", async () => {
+    delete process.env.PODCAST_WEBHOOK_SECRET;
     const request = new Request("http://localhost:3000/api/webhooks/podcast", {
       method: "POST",
       body: JSON.stringify({}),
       headers: {
         "Content-Type": "application/json",
-        "x-webhook-signature": "test-sig",
+        "x-webhook-signature": "some-sig",
+      },
+    });
+
+    const response = await POST(request);
+    const body = await response.json();
+
+    expect(response.status).toBe(500);
+    expect(body.error).toBe("Webhook not configured");
+  });
+
+  it("returns 400 when x-platform header is missing", async () => {
+    const rawBody = JSON.stringify({});
+    const signature = await computeSignature(rawBody);
+    const request = new Request("http://localhost:3000/api/webhooks/podcast", {
+      method: "POST",
+      body: rawBody,
+      headers: {
+        "Content-Type": "application/json",
+        "x-webhook-signature": signature,
       },
     });
 
@@ -73,12 +135,10 @@ describe("POST /api/webhooks/podcast", () => {
   });
 
   it("returns 400 for unsupported platform", async () => {
-    const request = makeRequest(
-      {},
-      { "x-platform": "spotify" }
+    const response = await POST(
+      await makeRequest({}, { "x-platform": "spotify" })
     );
 
-    const response = await POST(request);
     const body = await response.json();
 
     expect(response.status).toBe(400);
@@ -86,12 +146,14 @@ describe("POST /api/webhooks/podcast", () => {
   });
 
   it("returns 400 for invalid JSON", async () => {
+    const rawBody = "not valid json{{{";
+    const signature = await computeSignature(rawBody);
     const request = new Request("http://localhost:3000/api/webhooks/podcast", {
       method: "POST",
-      body: "not valid json{{{",
+      body: rawBody,
       headers: {
         "Content-Type": "application/json",
-        "x-webhook-signature": "test-sig",
+        "x-webhook-signature": signature,
         "x-platform": "buzzsprout",
       },
     });
@@ -115,7 +177,7 @@ describe("POST /api/webhooks/podcast", () => {
         },
       };
 
-      const response = await POST(makeRequest(payload));
+      const response = await POST(await makeRequest(payload));
       const body = await response.json();
 
       expect(response.status).toBe(200);
@@ -135,7 +197,7 @@ describe("POST /api/webhooks/podcast", () => {
         },
       };
 
-      const response = await POST(makeRequest(payload));
+      const response = await POST(await makeRequest(payload));
       const body = await response.json();
 
       expect(response.status).toBe(200);
@@ -151,7 +213,7 @@ describe("POST /api/webhooks/podcast", () => {
         },
       };
 
-      const response = await POST(makeRequest(payload));
+      const response = await POST(await makeRequest(payload));
       const body = await response.json();
 
       expect(response.status).toBe(200);
@@ -160,7 +222,7 @@ describe("POST /api/webhooks/podcast", () => {
 
     it("returns 400 for invalid buzzsprout payload", async () => {
       const response = await POST(
-        makeRequest({ invalid: "payload" })
+        await makeRequest({ invalid: "payload" })
       );
       const body = await response.json();
 
@@ -178,7 +240,7 @@ describe("POST /api/webhooks/podcast", () => {
         },
       };
 
-      const response = await POST(makeRequest(payload));
+      const response = await POST(await makeRequest(payload));
       const body = await response.json();
 
       expect(response.status).toBe(200);
@@ -202,7 +264,7 @@ describe("POST /api/webhooks/podcast", () => {
       };
 
       const response = await POST(
-        makeRequest(payload, { "x-platform": "transistor" })
+        await makeRequest(payload, { "x-platform": "transistor" })
       );
       const body = await response.json();
 
@@ -226,7 +288,7 @@ describe("POST /api/webhooks/podcast", () => {
       };
 
       const response = await POST(
-        makeRequest(payload, { "x-platform": "transistor" })
+        await makeRequest(payload, { "x-platform": "transistor" })
       );
       const body = await response.json();
 
@@ -246,7 +308,7 @@ describe("POST /api/webhooks/podcast", () => {
       };
 
       const response = await POST(
-        makeRequest(payload, { "x-platform": "transistor" })
+        await makeRequest(payload, { "x-platform": "transistor" })
       );
       const body = await response.json();
 
@@ -256,7 +318,7 @@ describe("POST /api/webhooks/podcast", () => {
 
     it("returns 400 for invalid transistor payload", async () => {
       const response = await POST(
-        makeRequest({ bad: "data" }, { "x-platform": "transistor" })
+        await makeRequest({ bad: "data" }, { "x-platform": "transistor" })
       );
       const body = await response.json();
 
@@ -278,7 +340,7 @@ describe("POST /api/webhooks/podcast", () => {
         },
       };
 
-      const response = await POST(makeRequest(payload));
+      const response = await POST(await makeRequest(payload));
       expect(response.status).toBe(200);
     });
 
@@ -300,9 +362,72 @@ describe("POST /api/webhooks/podcast", () => {
       };
 
       const response = await POST(
-        makeRequest(payload, { "x-platform": "transistor" })
+        await makeRequest(payload, { "x-platform": "transistor" })
       );
       expect(response.status).toBe(200);
+    });
+  });
+
+  describe("Webhook signature validation", () => {
+    it("rejects request with signature from wrong secret", async () => {
+      const payload = JSON.stringify({
+        event: "episode_published",
+        episode: { id: 1, title: "Test" },
+      });
+      const key = await globalThis.crypto.subtle.importKey(
+        "raw",
+        new TextEncoder().encode("wrong-secret"),
+        { name: "HMAC", hash: "SHA-256" },
+        false,
+        ["sign"]
+      );
+      const sig = await globalThis.crypto.subtle.sign(
+        "HMAC",
+        key,
+        new TextEncoder().encode(payload)
+      );
+      const signature = Array.from(new Uint8Array(sig), (b) =>
+        b.toString(16).padStart(2, "0")
+      ).join("");
+
+      const request = new Request("http://localhost:3000/api/webhooks/podcast", {
+        method: "POST",
+        body: payload,
+        headers: {
+          "Content-Type": "application/json",
+          "x-webhook-signature": signature,
+          "x-platform": "buzzsprout",
+        },
+      });
+
+      const response = await POST(request);
+      expect(response.status).toBe(401);
+    });
+
+    it("accepts request with valid HMAC signature", async () => {
+      const payload = {
+        event: "episode_published",
+        episode: { id: 1, title: "Valid Sig" },
+      };
+      const response = await POST(await makeRequest(payload));
+      expect(response.status).toBe(200);
+    });
+
+    it("rejects empty signature string", async () => {
+      const request = new Request("http://localhost:3000/api/webhooks/podcast", {
+        method: "POST",
+        body: JSON.stringify({ event: "episode_published", episode: { id: 1, title: "Test" } }),
+        headers: {
+          "Content-Type": "application/json",
+          "x-webhook-signature": "",
+          "x-platform": "buzzsprout",
+        },
+      });
+
+      const response = await POST(request);
+      expect(response.status).toBe(401);
+      const body = await response.json();
+      expect(body.error).toBe("Missing webhook signature");
     });
   });
 });

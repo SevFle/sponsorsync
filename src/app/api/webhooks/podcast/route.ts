@@ -79,6 +79,34 @@ function buildTransistorEvent(
   };
 }
 
+async function verifyWebhookSignature(
+  payload: string,
+  signature: string,
+  secret: string
+): Promise<boolean> {
+  const key = await globalThis.crypto.subtle.importKey(
+    "raw",
+    new TextEncoder().encode(secret),
+    { name: "HMAC", hash: "SHA-256" },
+    false,
+    ["sign"]
+  );
+  const sig = await globalThis.crypto.subtle.sign(
+    "HMAC",
+    key,
+    new TextEncoder().encode(payload)
+  );
+  const expected = Array.from(new Uint8Array(sig), (b) =>
+    b.toString(16).padStart(2, "0")
+  ).join("");
+  if (expected.length !== signature.length) return false;
+  let result = 0;
+  for (let i = 0; i < expected.length; i++) {
+    result |= expected.charCodeAt(i) ^ signature.charCodeAt(i);
+  }
+  return result === 0;
+}
+
 async function fetchVerificationData(
   event: PodcastWebhookEvent,
   apiKey: string,
@@ -108,6 +136,8 @@ async function fetchVerificationData(
 }
 
 export async function POST(request: Request) {
+  const rawBody = await request.text();
+
   const signature = request.headers.get("x-webhook-signature");
   if (!signature) {
     return NextResponse.json(
@@ -116,9 +146,24 @@ export async function POST(request: Request) {
     );
   }
 
+  const secret = process.env.PODCAST_WEBHOOK_SECRET;
+  if (!secret) {
+    return NextResponse.json(
+      { error: "Webhook not configured" },
+      { status: 500 }
+    );
+  }
+
+  if (!(await verifyWebhookSignature(rawBody, signature, secret))) {
+    return NextResponse.json(
+      { error: "Invalid webhook signature" },
+      { status: 401 }
+    );
+  }
+
   let body: unknown;
   try {
-    body = await request.json();
+    body = JSON.parse(rawBody);
   } catch {
     return NextResponse.json(
       { error: "Invalid JSON payload" },
