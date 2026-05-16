@@ -6,8 +6,9 @@ import { MetricCard } from "@/components/dashboard/metric-card";
 import { DeadlineRow } from "@/components/dashboard/deadline-row";
 import { ActivityRow } from "@/components/dashboard/activity-row";
 import { formatCurrency } from "@/lib/format";
-import { getDashboardData } from "@/lib/dashboard/data";
-import type { DashboardDeal, DashboardDeliverable, DashboardPayment } from "@/types/dashboard";
+import { createServerFetch } from "@/lib/auth/server-fetch";
+import { config } from "@/lib/config";
+import type { DashboardData, DashboardDeliverable, DashboardPayment } from "@/types/dashboard";
 
 function getUpcomingDeliverables(deliverables: DashboardDeliverable[]) {
   return deliverables
@@ -32,9 +33,10 @@ function getRecentActivity(payments: DashboardPayment[]) {
 export default async function DashboardPage() {
   const session = await requireAuth();
 
-  let data;
+  let data: DashboardData;
   try {
-    data = await getDashboardData(session.user.id);
+    const serverFetch = createServerFetch({ baseUrl: config.app.url });
+    data = await serverFetch.get<DashboardData>("/api/dashboard");
   } catch (err) {
     throw new Error(
       err instanceof Error ? err.message : "Failed to load dashboard data"

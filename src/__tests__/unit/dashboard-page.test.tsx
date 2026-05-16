@@ -5,10 +5,26 @@ vi.mock("@/lib/auth/guard", () => ({
   requireAuth: vi.fn(),
 }));
 
-const mockGetDashboardData = vi.fn();
+const mockServerFetchGet = vi.fn();
 
-vi.mock("@/lib/dashboard/data", () => ({
-  getDashboardData: (...args: unknown[]) => mockGetDashboardData(...args),
+vi.mock("@/lib/auth/server-fetch", () => ({
+  createServerFetch: () => ({
+    get: (...args: unknown[]) => mockServerFetchGet(...args),
+    post: vi.fn(),
+    put: vi.fn(),
+    delete: vi.fn(),
+  }),
+}));
+
+vi.mock("@/lib/config", () => ({
+  config: {
+    app: { url: "http://localhost:3000", name: "SponsorSync" },
+    database: { url: "" },
+    auth: { secret: "", url: "http://localhost:3000" },
+    email: { resendApiKey: "" },
+    inngest: { eventKey: "", signingKey: "" },
+    stripe: { secretKey: "", publishableKey: "", webhookSecret: "", starterPriceId: "", proPriceId: "" },
+  },
 }));
 
 import { requireAuth } from "@/lib/auth/guard";
@@ -161,7 +177,7 @@ function mockApiFetch(overrides: Partial<{
       (p.status === "pending" && p.dueDate && new Date(p.dueDate) < new Date())
   ).length;
 
-  mockGetDashboardData.mockResolvedValue({
+  mockServerFetchGet.mockResolvedValue({
     deals,
     deliverables,
     payments,
@@ -198,21 +214,21 @@ describe("DashboardPage - server-side auth guard", () => {
     const { default: DashboardPage } = await import("@/app/(dashboard)/page");
 
     await expect(DashboardPage()).rejects.toThrow("NEXT_REDIRECT");
-    expect(mockGetDashboardData).not.toHaveBeenCalled();
+    expect(mockServerFetchGet).not.toHaveBeenCalled();
   });
 });
 
 describe("DashboardPage - server-side data fetching", () => {
-  it("calls getDashboardData with authenticated user id", async () => {
+  it("calls aggregated dashboard API via authenticated server fetch", async () => {
     mockApiFetch();
     const { default: DashboardPage } = await import("@/app/(dashboard)/page");
 
     await DashboardPage();
 
-    expect(mockGetDashboardData).toHaveBeenCalledWith("user-1");
+    expect(mockServerFetchGet).toHaveBeenCalledWith("/api/dashboard");
   });
 
-  it("fetches all data via single consolidated call", async () => {
+  it("fetches all data via single consolidated API call", async () => {
     mockApiFetch({
       deals: mockDeals,
       deliverables: mockDeliverables,
@@ -222,7 +238,7 @@ describe("DashboardPage - server-side data fetching", () => {
 
     await DashboardPage();
 
-    expect(mockGetDashboardData).toHaveBeenCalledTimes(1);
+    expect(mockServerFetchGet).toHaveBeenCalledTimes(1);
   });
 
   it("makes exactly one API call instead of three separate calls", async () => {
@@ -235,7 +251,7 @@ describe("DashboardPage - server-side data fetching", () => {
 
     await DashboardPage();
 
-    expect(mockGetDashboardData).toHaveBeenCalledTimes(1);
+    expect(mockServerFetchGet).toHaveBeenCalledTimes(1);
   });
 });
 
@@ -412,22 +428,22 @@ describe("DashboardPage - empty states", () => {
 });
 
 describe("DashboardPage - error propagation", () => {
-  it("propagates errors from getDashboardData", async () => {
-    mockGetDashboardData.mockRejectedValue(new Error("Failed to fetch dashboard data"));
+  it("propagates errors from server fetch", async () => {
+    mockServerFetchGet.mockRejectedValue(new Error("Failed to fetch dashboard data"));
     const { default: DashboardPage } = await import("@/app/(dashboard)/page");
 
     await expect(DashboardPage()).rejects.toThrow("Failed to fetch dashboard data");
   });
 
   it("propagates database connection errors", async () => {
-    mockGetDashboardData.mockRejectedValue(new Error("Database connection failed"));
+    mockServerFetchGet.mockRejectedValue(new Error("Database connection failed"));
     const { default: DashboardPage } = await import("@/app/(dashboard)/page");
 
     await expect(DashboardPage()).rejects.toThrow("Database connection failed");
   });
 
   it("propagates query errors from underlying data sources", async () => {
-    mockGetDashboardData.mockRejectedValue(new Error("Query failed"));
+    mockServerFetchGet.mockRejectedValue(new Error("Query failed"));
     const { default: DashboardPage } = await import("@/app/(dashboard)/page");
 
     await expect(DashboardPage()).rejects.toThrow("Query failed");
@@ -616,7 +632,7 @@ describe("DashboardPage - session edge cases", () => {
 
     const result = await DashboardPage();
     expect(result).toBeDefined();
-    expect(mockGetDashboardData).toHaveBeenCalled();
+    expect(mockServerFetchGet).toHaveBeenCalled();
   });
 
   it("calls requireAuth exactly once per render", async () => {
