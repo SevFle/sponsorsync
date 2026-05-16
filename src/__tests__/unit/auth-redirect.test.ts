@@ -58,6 +58,41 @@ describe("redirectToLogin", () => {
   });
 });
 
+describe("redirectToLogin - open redirect protection", () => {
+  beforeEach(() => {
+    vi.restoreAllMocks();
+    Object.defineProperty(window, "location", {
+      writable: true,
+      value: { href: "" },
+    });
+  });
+
+  it("rejects external URLs (https://evil.com)", () => {
+    redirectToLogin("https://evil.com");
+    expect(window.location.href).toBe("/login");
+  });
+
+  it("rejects external URLs (http://evil.com)", () => {
+    redirectToLogin("http://evil.com");
+    expect(window.location.href).toBe("/login");
+  });
+
+  it("rejects protocol-relative URLs (//evil.com)", () => {
+    redirectToLogin("//evil.com");
+    expect(window.location.href).toBe("/login");
+  });
+
+  it("rejects javascript: scheme URLs", () => {
+    redirectToLogin("javascript:alert(1)");
+    expect(window.location.href).toBe("/login");
+  });
+
+  it("rejects data: scheme URLs", () => {
+    redirectToLogin("data:text/html,<script>alert(1)</script>");
+    expect(window.location.href).toBe("/login");
+  });
+});
+
 describe("redirectToLogin - server-side guard", () => {
   it("does not throw when window is undefined", () => {
     const originalWindow = globalThis.window;

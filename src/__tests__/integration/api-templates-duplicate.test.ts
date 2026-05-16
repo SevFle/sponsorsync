@@ -225,6 +225,26 @@ describe("POST /api/templates/[id]/duplicate - not found", () => {
   });
 });
 
+describe("POST /api/templates/[id]/duplicate - IDOR protection", () => {
+  it("returns 403 when sourceTemplate has a different userId", async () => {
+    mockGetTemplateById.mockResolvedValue({ ...sourceTemplate, userId: "user-2" });
+
+    const response = await POST(
+      new Request("http://localhost:3000/api/templates/tmpl-1/duplicate", {
+        method: "POST",
+        body: JSON.stringify({}),
+        headers: { "Content-Type": "application/json" },
+      }),
+      { params: Promise.resolve({ id: "tmpl-1" }) }
+    );
+
+    expect(response.status).toBe(403);
+    const body = await response.json();
+    expect(body.error).toBe("Forbidden");
+    expect(mockCreateTemplate).not.toHaveBeenCalled();
+  });
+});
+
 describe("POST /api/templates/[id]/duplicate - validation", () => {
   it("returns 422 when name is empty string", async () => {
     const response = await POST(

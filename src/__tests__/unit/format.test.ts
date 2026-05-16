@@ -28,11 +28,13 @@ describe("formatCurrency", () => {
 
   it("formats with EUR currency", () => {
     const result = formatCurrency(1000, "EUR");
+    expect(result).toContain("€");
     expect(result).toContain("1,000");
   });
 
   it("formats with GBP currency", () => {
     const result = formatCurrency(2500, "GBP");
+    expect(result).toContain("£");
     expect(result).toContain("2,500");
   });
 

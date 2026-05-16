@@ -38,6 +38,10 @@ export async function POST(
       return NextResponse.json({ error: "Template not found" }, { status: 404 });
     }
 
+    if (source.userId !== session.user.id) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+
     const duplicated = await createTemplate({
       userId: session.user.id,
       name: parsed.data.name ?? `${source.name} (Copy)`,
