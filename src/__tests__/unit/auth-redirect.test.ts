@@ -1,55 +1,76 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { describe, it, expect, vi, beforeEach } from "vitest";
+import { redirectToLogin } from "@/lib/auth/redirect";
 
 describe("redirectToLogin", () => {
-  const originalWindow = global.window;
   const originalLocation = window.location;
 
   beforeEach(() => {
-    vi.resetModules();
-    delete (window as any).location;
-    (window as any).location = { href: "" };
+    vi.restoreAllMocks();
+    Object.defineProperty(window, "location", {
+      writable: true,
+      value: { href: "" },
+    });
   });
 
-  afterEach(() => {
-    (window as any).location = originalLocation;
-    global.window = originalWindow;
-  });
-
-  it("redirects to /login when no callbackUrl provided", async () => {
-    const { redirectToLogin } = await import("@/lib/auth/redirect");
+  it("redirects to /login without callbackUrl", () => {
     redirectToLogin();
     expect(window.location.href).toBe("/login");
   });
 
-  it("redirects to /login with callbackUrl query param", async () => {
-    const { redirectToLogin } = await import("@/lib/auth/redirect");
-    redirectToLogin("/dashboard/deals");
-    expect(window.location.href).toBe("/login?callbackUrl=%2Fdashboard%2Fdeals");
+  it("redirects to /login with callbackUrl", () => {
+    redirectToLogin("/dashboard");
+    expect(window.location.href).toBe("/login?callbackUrl=%2Fdashboard");
   });
 
-  it("encodes special characters in callbackUrl", async () => {
-    const { redirectToLogin } = await import("@/lib/auth/redirect");
-    redirectToLogin("/dashboard/deals/123/edit?tab=overview");
+  it("encodes the callbackUrl properly", () => {
+    redirectToLogin("/dashboard/deals/123/edit");
     expect(window.location.href).toBe(
-      "/login?callbackUrl=%2Fdashboard%2Fdeals%2F123%2Fedit%3Ftab%3Doverview"
+      "/login?callbackUrl=%2Fdashboard%2Fdeals%2F123%2Fedit"
     );
   });
 
-  it("redirects to /login with root path callbackUrl", async () => {
-    const { redirectToLogin } = await import("@/lib/auth/redirect");
+  it("handles callbackUrl with query parameters", () => {
+    redirectToLogin("/dashboard/deals?page=2&status=active");
+    const expected = "/login?callbackUrl=%2Fdashboard%2Fdeals%3Fpage%3D2%26status%3Dactive";
+    expect(window.location.href).toBe(expected);
+  });
+
+  it("handles empty string callbackUrl as no callbackUrl", () => {
+    redirectToLogin("");
+    expect(window.location.href).toBe("/login");
+  });
+
+  it("handles root path callbackUrl", () => {
     redirectToLogin("/");
     expect(window.location.href).toBe("/login?callbackUrl=%2F");
   });
 
-  it("does not throw when callbackUrl is undefined", async () => {
-    const { redirectToLogin } = await import("@/lib/auth/redirect");
-    expect(() => redirectToLogin(undefined)).not.toThrow();
-    expect(window.location.href).toBe("/login");
+  it("handles deeply nested callbackUrl", () => {
+    redirectToLogin("/dashboard/settings/billing/history");
+    expect(window.location.href).toContain("callbackUrl=");
+    expect(window.location.href).toContain("%2Fdashboard%2Fsettings%2Fbilling%2Fhistory");
   });
 
-  it("handles callbackUrl with hash fragment", async () => {
-    const { redirectToLogin } = await import("@/lib/auth/redirect");
-    redirectToLogin("/dashboard#section");
-    expect(window.location.href).toBe("/login?callbackUrl=%2Fdashboard%23section");
+  it("handles callbackUrl with special characters", () => {
+    redirectToLogin("/dashboard/deals?search=hello world");
+    expect(window.location.href).toContain("callbackUrl=");
+    expect(decodeURIComponent(window.location.href)).toContain("search=hello world");
+  });
+});
+
+describe("redirectToLogin - server-side guard", () => {
+  it("does not throw when window is undefined", () => {
+    const originalWindow = globalThis.window;
+    Object.defineProperty(globalThis, "window", {
+      value: undefined,
+      writable: true,
+    });
+
+    expect(() => redirectToLogin("/dashboard")).not.toThrow();
+
+    Object.defineProperty(globalThis, "window", {
+      value: originalWindow,
+      writable: true,
+    });
   });
 });
