@@ -1,8 +1,8 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
+import { useAuth } from "@/hooks/use-auth";
 import { PageHeader } from "@/components/ui/page-header";
 import { TemplateList, type TemplateListItem } from "@/components/templates/TemplateList";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -13,7 +13,7 @@ interface TemplatesResponse {
 }
 
 export default function TemplatesPage() {
-  const { status: sessionStatus } = useSession();
+  const { isAuthenticated } = useAuth();
   const router = useRouter();
 
   const [templates, setTemplates] = useState<TemplateListItem[]>([]);
@@ -43,22 +43,18 @@ export default function TemplatesPage() {
   }, [search, categoryFilter]);
 
   useEffect(() => {
-    if (sessionStatus === "unauthenticated") {
-      router.replace("/login");
-      return;
-    }
-    if (sessionStatus !== "authenticated") return;
+    if (!isAuthenticated) return;
 
     const controller = new AbortController();
     fetchTemplates(controller.signal);
     return () => controller.abort();
-  }, [fetchTemplates, sessionStatus, router]);
+  }, [fetchTemplates, isAuthenticated]);
 
   const handleSelect = (id: string) => {
     router.push(`/dashboard/templates/${id}`);
   };
 
-  if (sessionStatus !== "authenticated") {
+  if (!isAuthenticated) {
     return null;
   }
 

@@ -1,8 +1,8 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
+import { useAuth } from "@/hooks/use-auth";
 import { StatusBadge, type DealStatus } from "@/components/ui/status-badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { apiFetch } from "@/lib/api-client";
@@ -47,7 +47,7 @@ function formatCurrency(amount: number, currency: string) {
 }
 
 export default function SponsorDetailPage({ params }: { params: Promise<{ id: string }> }) {
-  const { status: sessionStatus } = useSession();
+  const { isAuthenticated } = useAuth();
   const router = useRouter();
   const [resolvedId, setResolvedId] = useState<string | null>(null);
   const [sponsor, setSponsor] = useState<Sponsor | null>(null);
@@ -76,17 +76,12 @@ export default function SponsorDetailPage({ params }: { params: Promise<{ id: st
   }, []);
 
   useEffect(() => {
-    if (sessionStatus === "unauthenticated") {
-      const currentPath = window.location.pathname;
-      router.replace(`/login?callbackUrl=${encodeURIComponent(currentPath)}`);
-      return;
-    }
-    if (sessionStatus !== "authenticated" || !resolvedId) return;
+    if (!isAuthenticated || !resolvedId) return;
 
     const controller = new AbortController();
     fetchSponsor(resolvedId, controller.signal);
     return () => controller.abort();
-  }, [fetchSponsor, sessionStatus, router, resolvedId]);
+  }, [fetchSponsor, isAuthenticated, resolvedId]);
 
   const handleDelete = async () => {
     if (!resolvedId || !confirm("Are you sure you want to delete this sponsor? This action cannot be undone.")) return;
@@ -100,7 +95,7 @@ export default function SponsorDetailPage({ params }: { params: Promise<{ id: st
     }
   };
 
-  if (sessionStatus !== "authenticated" || !resolvedId) {
+  if (!isAuthenticated || !resolvedId) {
     return null;
   }
 

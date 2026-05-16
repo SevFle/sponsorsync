@@ -1,8 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { useSession } from "next-auth/react";
-import { useRouter } from "next/navigation";
+import { useAuth } from "@/hooks/use-auth";
 import { PageHeader } from "@/components/ui/page-header";
 import { apiFetch } from "@/lib/api-client";
 import { cn } from "@/lib/utils";
@@ -21,8 +20,7 @@ export default function SponsorCommunicationsPage({
 }: {
   params: Promise<{ id: string }>;
 }) {
-  const { status: sessionStatus } = useSession();
-  const router = useRouter();
+  const { isAuthenticated } = useAuth();
   const [sponsorId, setSponsorId] = useState<string | null>(null);
   const [sponsorName, setSponsorName] = useState("");
   const [tab, setTab] = useState<Tab>("contacts");
@@ -76,12 +74,7 @@ export default function SponsorCommunicationsPage({
   }, []);
 
   useEffect(() => {
-    if (sessionStatus === "unauthenticated") {
-      const currentPath = window.location.pathname;
-      router.replace(`/login?callbackUrl=${encodeURIComponent(currentPath)}`);
-      return;
-    }
-    if (sessionStatus !== "authenticated" || !sponsorId) return;
+    if (!isAuthenticated || !sponsorId) return;
 
     const controller = new AbortController();
     setLoading(true);
@@ -92,7 +85,7 @@ export default function SponsorCommunicationsPage({
     ]).finally(() => setLoading(false));
 
     return () => controller.abort();
-  }, [sessionStatus, router, sponsorId, fetchSponsor, fetchContacts, fetchCommunications]);
+  }, [isAuthenticated, sponsorId, fetchSponsor, fetchContacts, fetchCommunications]);
 
   async function handleCreateContact(data: ContactFormData) {
     if (!sponsorId) return;
@@ -140,7 +133,7 @@ export default function SponsorCommunicationsPage({
     fetchCommunications(sponsorId);
   }
 
-  if (sessionStatus !== "authenticated" || !sponsorId) {
+  if (!isAuthenticated || !sponsorId) {
     return null;
   }
 

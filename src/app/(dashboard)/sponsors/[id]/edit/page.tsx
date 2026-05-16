@@ -1,8 +1,8 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
+import { useAuth } from "@/hooks/use-auth";
 import { apiFetch, ApiError } from "@/lib/api-client";
 
 interface SponsorData {
@@ -15,7 +15,7 @@ interface SponsorData {
 }
 
 export default function EditSponsorPage({ params }: { params: Promise<{ id: string }> }) {
-  const { status: sessionStatus } = useSession();
+  const { isAuthenticated } = useAuth();
   const router = useRouter();
   const [resolvedId, setResolvedId] = useState<string | null>(null);
 
@@ -50,13 +50,9 @@ export default function EditSponsorPage({ params }: { params: Promise<{ id: stri
   }, []);
 
   useEffect(() => {
-    if (sessionStatus === "unauthenticated") {
-      router.replace("/login");
-      return;
-    }
-    if (sessionStatus !== "authenticated" || !resolvedId) return;
+    if (!isAuthenticated || !resolvedId) return;
     fetchSponsor(resolvedId);
-  }, [fetchSponsor, sessionStatus, router, resolvedId]);
+  }, [fetchSponsor, isAuthenticated, resolvedId]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -94,7 +90,7 @@ export default function EditSponsorPage({ params }: { params: Promise<{ id: stri
     }
   };
 
-  if (sessionStatus !== "authenticated" || !resolvedId) return null;
+  if (!isAuthenticated || !resolvedId) return null;
 
   if (loading) {
     return (

@@ -1,8 +1,8 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { useSession } from "next-auth/react";
 import { useRouter, useParams } from "next/navigation";
+import { useAuth } from "@/hooks/use-auth";
 import { PageHeader } from "@/components/ui/page-header";
 import { TemplateEditor } from "@/components/templates/TemplateEditor";
 import { TemplatePreview } from "@/components/templates/TemplatePreview";
@@ -20,7 +20,7 @@ interface TemplateData {
 }
 
 export default function TemplateDetailPage() {
-  const { status: sessionStatus } = useSession();
+  const { isAuthenticated } = useAuth();
   const router = useRouter();
   const params = useParams();
   const templateId = params.id as string;
@@ -46,15 +46,9 @@ export default function TemplateDetailPage() {
   }, [templateId]);
 
   useEffect(() => {
-    if (sessionStatus === "unauthenticated") {
-      router.replace("/login");
-    }
-  }, [sessionStatus, router]);
-
-  useEffect(() => {
-    if (sessionStatus !== "authenticated") return;
+    if (!isAuthenticated) return;
     fetchTemplate();
-  }, [fetchTemplate, sessionStatus]);
+  }, [fetchTemplate, isAuthenticated]);
 
   const handleSave = async (data: {
     name: string;
@@ -88,7 +82,7 @@ export default function TemplateDetailPage() {
     }
   };
 
-  if (sessionStatus !== "authenticated") {
+  if (!isAuthenticated) {
     return (
       <div className="flex h-64 items-center justify-center">
         <div className="h-8 w-8 animate-spin rounded-full border-4 border-gray-200 border-t-blue-600" />
