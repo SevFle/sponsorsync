@@ -243,6 +243,78 @@ describe("POST /api/templates/[id]/duplicate - IDOR protection", () => {
     expect(body.error).toBe("Forbidden");
     expect(mockCreateTemplate).not.toHaveBeenCalled();
   });
+
+  it("returns 403 when sourceTemplate belongs to another user (different IDs)", async () => {
+    mockGetTemplateById.mockResolvedValue({ ...sourceTemplate, userId: "completely-different-user-id" });
+
+    const response = await POST(
+      new Request("http://localhost:3000/api/templates/tmpl-1/duplicate", {
+        method: "POST",
+        body: JSON.stringify({}),
+        headers: { "Content-Type": "application/json" },
+      }),
+      { params: Promise.resolve({ id: "tmpl-1" }) }
+    );
+
+    expect(response.status).toBe(403);
+    expect(mockCreateTemplate).not.toHaveBeenCalled();
+  });
+
+  it("returns 403 when sourceTemplate userId is empty string", async () => {
+    mockGetTemplateById.mockResolvedValue({ ...sourceTemplate, userId: "" });
+
+    const response = await POST(
+      new Request("http://localhost:3000/api/templates/tmpl-1/duplicate", {
+        method: "POST",
+        body: JSON.stringify({}),
+        headers: { "Content-Type": "application/json" },
+      }),
+      { params: Promise.resolve({ id: "tmpl-1" }) }
+    );
+
+    expect(response.status).toBe(403);
+    expect(mockCreateTemplate).not.toHaveBeenCalled();
+  });
+
+  it("does not leak template body content on IDOR rejection", async () => {
+    mockGetTemplateById.mockResolvedValue({
+      ...sourceTemplate,
+      userId: "user-2",
+      body: "<p>Confidential sponsor content</p>",
+    });
+
+    const response = await POST(
+      new Request("http://localhost:3000/api/templates/tmpl-1/duplicate", {
+        method: "POST",
+        body: JSON.stringify({}),
+        headers: { "Content-Type": "application/json" },
+      }),
+      { params: Promise.resolve({ id: "tmpl-1" }) }
+    );
+
+    expect(response.status).toBe(403);
+    const body = await response.json();
+    expect(body.error).toBe("Forbidden");
+    expect(JSON.stringify(body)).not.toContain("Confidential");
+    expect(mockCreateTemplate).not.toHaveBeenCalled();
+  });
+
+  it("allows duplication when sourceTemplate userId matches session user", async () => {
+    mockGetTemplateById.mockResolvedValue({ ...sourceTemplate, userId: "user-1" });
+    mockCreateTemplate.mockImplementation((data: any) => Promise.resolve({ id: "tmpl-2", ...data }));
+
+    const response = await POST(
+      new Request("http://localhost:3000/api/templates/tmpl-1/duplicate", {
+        method: "POST",
+        body: JSON.stringify({}),
+        headers: { "Content-Type": "application/json" },
+      }),
+      { params: Promise.resolve({ id: "tmpl-1" }) }
+    );
+
+    expect(response.status).toBe(201);
+    expect(mockCreateTemplate).toHaveBeenCalled();
+  });
 });
 
 describe("POST /api/templates/[id]/duplicate - validation", () => {

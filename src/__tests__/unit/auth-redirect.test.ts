@@ -91,6 +91,61 @@ describe("redirectToLogin - open redirect protection", () => {
     redirectToLogin("data:text/html,<script>alert(1)</script>");
     expect(window.location.href).toBe("/login");
   });
+
+  it("rejects uppercase external URLs (HTTPS://EVIL.COM)", () => {
+    redirectToLogin("HTTPS://EVIL.COM");
+    expect(window.location.href).toBe("/login");
+  });
+
+  it("rejects external URL with path (https://evil.com/dashboard)", () => {
+    redirectToLogin("https://evil.com/dashboard");
+    expect(window.location.href).toBe("/login");
+  });
+
+  it("rejects external URL with trailing slash (https://evil.com/)", () => {
+    redirectToLogin("https://evil.com/");
+    expect(window.location.href).toBe("/login");
+  });
+
+  it("rejects external URL with query params", () => {
+    redirectToLogin("https://evil.com?redirect=/safe");
+    expect(window.location.href).toBe("/login");
+  });
+
+  it("rejects external URL with fragment (https://evil.com#section)", () => {
+    redirectToLogin("https://evil.com#section");
+    expect(window.location.href).toBe("/login");
+  });
+
+  it("rejects FTP scheme URLs", () => {
+    redirectToLogin("ftp://evil.com");
+    expect(window.location.href).toBe("/login");
+  });
+
+  it("rejects mailto: scheme URLs", () => {
+    redirectToLogin("mailto:user@evil.com");
+    expect(window.location.href).toBe("/login");
+  });
+
+  it("rejects vbscript: scheme URLs", () => {
+    redirectToLogin("vbscript:alert(1)");
+    expect(window.location.href).toBe("/login");
+  });
+
+  it("rejects triple-slash URLs (///evil.com)", () => {
+    redirectToLogin("///evil.com");
+    expect(window.location.href).toBe("/login");
+  });
+
+  it("rejects whitespace-padded external URLs", () => {
+    redirectToLogin("  https://evil.com  ");
+    expect(window.location.href).toBe("/login");
+  });
+
+  it("rejects external URL with encoded path", () => {
+    redirectToLogin("https://evil.com%2Fdashboard");
+    expect(window.location.href).toBe("/login");
+  });
 });
 
 describe("redirectToLogin - server-side guard", () => {

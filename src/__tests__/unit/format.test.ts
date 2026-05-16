@@ -27,15 +27,33 @@ describe("formatCurrency", () => {
   });
 
   it("formats with EUR currency", () => {
-    const result = formatCurrency(1000, "EUR");
-    expect(result).toContain("€");
-    expect(result).toContain("1,000");
+    expect(formatCurrency(1000, "EUR")).toBe("€1,000");
   });
 
   it("formats with GBP currency", () => {
+    expect(formatCurrency(2500, "GBP")).toBe("£2,500");
+  });
+
+  it("formats EUR with exact symbol placement", () => {
+    expect(formatCurrency(0, "EUR")).toBe("€0");
+    expect(formatCurrency(-500, "EUR")).toBe("-€500");
+    expect(formatCurrency(1000000, "EUR")).toBe("€1,000,000");
+  });
+
+  it("formats GBP with exact symbol placement", () => {
+    expect(formatCurrency(0, "GBP")).toBe("£0");
+    expect(formatCurrency(100, "GBP")).toBe("£100");
+    expect(formatCurrency(-300, "GBP")).toBe("-£300");
+  });
+
+  it("EUR result matches currency symbol pattern", () => {
+    const result = formatCurrency(1000, "EUR");
+    expect(result).toMatch(/^€[\d,]+$/);
+  });
+
+  it("GBP result matches currency symbol pattern", () => {
     const result = formatCurrency(2500, "GBP");
-    expect(result).toContain("£");
-    expect(result).toContain("2,500");
+    expect(result).toMatch(/^£[\d,]+$/);
   });
 
   it("uses zero fraction digits", () => {
