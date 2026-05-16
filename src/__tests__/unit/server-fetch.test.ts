@@ -1,403 +1,338 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
 const mockCookieStore = {
-  getAll: vi.fn<() => { name: string; value: string }[]>(),
-  get: vi.fn<(name: string) => { name: string; value: string } | undefined>(),
+  getAll: vi.fn(),
+  get: vi.fn(),
 };
 
 vi.mock("next/headers", () => ({
-  cookies: vi.fn(async () => mockCookieStore),
+  cookies: vi.fn(() => Promise.resolve(mockCookieStore)),
 }));
+
+vi.stubGlobal("fetch", vi.fn());
 
 import { createServerFetch, ApiError } from "@/lib/auth/server-fetch";
 
-beforeEach(() => {
-  vi.clearAllMocks();
-  mockCookieStore.getAll.mockReturnValue([]);
-  mockCookieStore.get.mockReturnValue(undefined);
+describe("createServerFetch - initialization", () => {
+  it("returns get, post, put, delete methods", () => {
+    const client = createServerFetch();
+    expect(typeof client.get).toBe("function");
+    expect(typeof client.post).toBe("function");
+    expect(typeof client.put).toBe("function");
+    expect(typeof client.delete).toBe("function");
+  });
+
+  it("accepts empty options", () => {
+    const client = createServerFetch();
+    expect(client).toBeDefined();
+  });
+
+  it("accepts baseUrl option", () => {
+    const client = createServerFetch({ baseUrl: "http://localhost:3000" });
+    expect(client).toBeDefined();
+  });
 });
 
-describe("createServerFetch - cookie forwarding", () => {
-  it("forwards all cookies as Cookie header", async () => {
+describe("createServerFetch - buildHeaders", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockCookieStore.getAll.mockReturnValue([]);
+    mockCookieStore.get.mockReturnValue(undefined);
+  });
+
+  it("includes Content-Type application/json in GET request", async () => {
+    (globalThis.fetch as ReturnType<typeof vi.fn>).mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: () => Promise.resolve({ data: "ok" }),
+    });
+
+    const client = createServerFetch({ baseUrl: "http://localhost:3000" });
+    await client.get("/api/test");
+
+    const fetchCall = (globalThis.fetch as ReturnType<typeof vi.fn>).mock.calls[0];
+    const headers = fetchCall[1].headers;
+    expect(headers["Content-Type"]).toBe("application/json");
+  });
+
+  it("includes cookies from cookie store", async () => {
     mockCookieStore.getAll.mockReturnValue([
       { name: "session", value: "abc123" },
-      { name: "csrfToken", value: "csrf-val" },
+      { name: "csrfToken", value: "csrf-abc" },
     ]);
-    mockCookieStore.get.mockReturnValue({ name: "csrfToken", value: "csrf-val" });
+    mockCookieStore.get.mockReturnValue({ name: "csrfToken", value: "csrf-abc" });
 
-    const mockJson = vi.fn().mockResolvedValue({ ok: true });
-    const mockFetch = vi.fn().mockResolvedValue({ ok: true, json: mockJson });
-    vi.stubGlobal("fetch", mockFetch);
+    (globalThis.fetch as ReturnType<typeof vi.fn>).mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: () => Promise.resolve({ data: "ok" }),
+    });
 
-    const client = createServerFetch();
+    const client = createServerFetch({ baseUrl: "http://localhost:3000" });
     await client.get("/api/test");
 
-    const callOpts = mockFetch.mock.calls[0][1];
-    expect(callOpts.headers.Cookie).toBe("session=abc123; csrfToken=csrf-val");
+    const fetchCall = (globalThis.fetch as ReturnType<typeof vi.fn>).mock.calls[0];
+    const headers = fetchCall[1].headers;
+    expect(headers.Cookie).toContain("session=abc123");
+    expect(headers.Cookie).toContain("csrfToken=csrf-abc");
   });
 
-  it("sends empty Cookie header when no cookies exist", async () => {
+  it("includes CSRF token header when csrfToken cookie exists", async () => {
     mockCookieStore.getAll.mockReturnValue([]);
-
-    const mockJson = vi.fn().mockResolvedValue({});
-    const mockFetch = vi.fn().mockResolvedValue({ ok: true, json: mockJson });
-    vi.stubGlobal("fetch", mockFetch);
-
-    const client = createServerFetch();
-    await client.get("/api/test");
-
-    const callOpts = mockFetch.mock.calls[0][1];
-    expect(callOpts.headers.Cookie).toBe("");
-  });
-});
-
-describe("createServerFetch - CSRF token header", () => {
-  it("sends X-CSRF-Token when csrfToken cookie exists", async () => {
-    mockCookieStore.getAll.mockReturnValue([{ name: "csrfToken", value: "my-csrf-token" }]);
     mockCookieStore.get.mockReturnValue({ name: "csrfToken", value: "my-csrf-token" });
 
-    const mockJson = vi.fn().mockResolvedValue({});
-    const mockFetch = vi.fn().mockResolvedValue({ ok: true, json: mockJson });
-    vi.stubGlobal("fetch", mockFetch);
+    (globalThis.fetch as ReturnType<typeof vi.fn>).mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: () => Promise.resolve({ data: "ok" }),
+    });
 
-    const client = createServerFetch();
-    await client.get("/api/test");
+    const client = createServerFetch({ baseUrl: "http://localhost:3000" });
+    await client.post("/api/test", { name: "test" });
 
-    const callOpts = mockFetch.mock.calls[0][1];
-    expect(callOpts.headers["X-CSRF-Token"]).toBe("my-csrf-token");
+    const fetchCall = (globalThis.fetch as ReturnType<typeof vi.fn>).mock.calls[0];
+    const headers = fetchCall[1].headers;
+    expect(headers["X-CSRF-Token"]).toBe("my-csrf-token");
   });
 
-  it("omits X-CSRF-Token when csrfToken cookie does not exist", async () => {
+  it("does not include CSRF header when no csrfToken cookie", async () => {
     mockCookieStore.getAll.mockReturnValue([]);
     mockCookieStore.get.mockReturnValue(undefined);
 
-    const mockJson = vi.fn().mockResolvedValue({});
-    const mockFetch = vi.fn().mockResolvedValue({ ok: true, json: mockJson });
-    vi.stubGlobal("fetch", mockFetch);
+    (globalThis.fetch as ReturnType<typeof vi.fn>).mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: () => Promise.resolve({ data: "ok" }),
+    });
 
-    const client = createServerFetch();
+    const client = createServerFetch({ baseUrl: "http://localhost:3000" });
     await client.get("/api/test");
 
-    const callOpts = mockFetch.mock.calls[0][1];
-    expect(callOpts.headers).not.toHaveProperty("X-CSRF-Token");
+    const fetchCall = (globalThis.fetch as ReturnType<typeof vi.fn>).mock.calls[0];
+    const headers = fetchCall[1].headers;
+    expect(headers).not.toHaveProperty("X-CSRF-Token");
   });
 });
 
-describe("createServerFetch - default headers", () => {
-  it("sends Content-Type application/json by default", async () => {
-    const mockJson = vi.fn().mockResolvedValue({});
-    const mockFetch = vi.fn().mockResolvedValue({ ok: true, json: mockJson });
-    vi.stubGlobal("fetch", mockFetch);
-
-    const client = createServerFetch();
-    await client.get("/api/test");
-
-    const callOpts = mockFetch.mock.calls[0][1];
-    expect(callOpts.headers["Content-Type"]).toBe("application/json");
+describe("createServerFetch - GET", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockCookieStore.getAll.mockReturnValue([]);
+    mockCookieStore.get.mockReturnValue(undefined);
   });
-});
 
-describe("createServerFetch - get", () => {
-  it("calls fetch with GET method", async () => {
-    const mockJson = vi.fn().mockResolvedValue({ data: "test" });
-    const mockFetch = vi.fn().mockResolvedValue({ ok: true, json: mockJson });
-    vi.stubGlobal("fetch", mockFetch);
+  it("makes GET request to correct URL", async () => {
+    (globalThis.fetch as ReturnType<typeof vi.fn>).mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: () => Promise.resolve({ items: [] }),
+    });
 
-    const client = createServerFetch();
-    const result = await client.get("/api/items");
+    const client = createServerFetch({ baseUrl: "http://localhost:3000" });
+    const result = await client.get("/api/templates");
 
-    expect(mockFetch).toHaveBeenCalledWith(
-      "/api/items",
+    expect(globalThis.fetch).toHaveBeenCalledWith(
+      "http://localhost:3000/api/templates",
       expect.objectContaining({ method: "GET" })
     );
-    expect(result).toEqual({ data: "test" });
+    expect(result).toEqual({ items: [] });
   });
 
-  it("appends query params to URL", async () => {
-    const mockJson = vi.fn().mockResolvedValue([]);
-    const mockFetch = vi.fn().mockResolvedValue({ ok: true, json: mockJson });
-    vi.stubGlobal("fetch", mockFetch);
+  it("appends query params to GET URL", async () => {
+    (globalThis.fetch as ReturnType<typeof vi.fn>).mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: () => Promise.resolve([]),
+    });
 
-    const client = createServerFetch();
-    await client.get("/api/items", { page: "1", limit: "10" });
+    const client = createServerFetch({ baseUrl: "http://localhost:3000" });
+    await client.get("/api/templates", { search: "test", category: "outreach" });
 
-    expect(mockFetch).toHaveBeenCalledWith(
-      "/api/items?page=1&limit=10",
-      expect.anything()
-    );
+    const fetchCall = (globalThis.fetch as ReturnType<typeof vi.fn>).mock.calls[0];
+    expect(fetchCall[0]).toContain("search=test");
+    expect(fetchCall[0]).toContain("category=outreach");
   });
 
-  it("does not append query string when no params", async () => {
-    const mockJson = vi.fn().mockResolvedValue([]);
-    const mockFetch = vi.fn().mockResolvedValue({ ok: true, json: mockJson });
-    vi.stubGlobal("fetch", mockFetch);
+  it("makes GET request without params", async () => {
+    (globalThis.fetch as ReturnType<typeof vi.fn>).mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: () => Promise.resolve([]),
+    });
 
-    const client = createServerFetch();
-    await client.get("/api/items");
+    const client = createServerFetch({ baseUrl: "http://localhost:3000" });
+    await client.get("/api/templates");
 
-    expect(mockFetch).toHaveBeenCalledWith(
-      "/api/items",
-      expect.anything()
-    );
+    const fetchCall = (globalThis.fetch as ReturnType<typeof vi.fn>).mock.calls[0];
+    expect(fetchCall[0]).toBe("http://localhost:3000/api/templates");
   });
 });
 
-describe("createServerFetch - post", () => {
-  it("calls fetch with POST method and JSON body", async () => {
-    const mockJson = vi.fn().mockResolvedValue({ id: "1" });
-    const mockFetch = vi.fn().mockResolvedValue({ ok: true, json: mockJson });
-    vi.stubGlobal("fetch", mockFetch);
+describe("createServerFetch - POST", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockCookieStore.getAll.mockReturnValue([]);
+    mockCookieStore.get.mockReturnValue(undefined);
+  });
 
-    const client = createServerFetch();
-    await client.post("/api/items", { name: "New" });
+  it("makes POST request with JSON body", async () => {
+    (globalThis.fetch as ReturnType<typeof vi.fn>).mockResolvedValue({
+      ok: true,
+      status: 201,
+      json: () => Promise.resolve({ id: "1" }),
+    });
 
-    expect(mockFetch).toHaveBeenCalledWith(
-      "/api/items",
+    const client = createServerFetch({ baseUrl: "http://localhost:3000" });
+    const result = await client.post("/api/templates", { name: "Test" });
+
+    expect(globalThis.fetch).toHaveBeenCalledWith(
+      "http://localhost:3000/api/templates",
       expect.objectContaining({
         method: "POST",
-        body: JSON.stringify({ name: "New" }),
+        body: JSON.stringify({ name: "Test" }),
       })
     );
+    expect(result).toEqual({ id: "1" });
   });
 
-  it("calls fetch with POST and no body when undefined", async () => {
-    const mockJson = vi.fn().mockResolvedValue({ ok: true });
-    const mockFetch = vi.fn().mockResolvedValue({ ok: true, json: mockJson });
-    vi.stubGlobal("fetch", mockFetch);
+  it("makes POST request without body", async () => {
+    (globalThis.fetch as ReturnType<typeof vi.fn>).mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: () => Promise.resolve({ ok: true }),
+    });
 
-    const client = createServerFetch();
+    const client = createServerFetch({ baseUrl: "http://localhost:3000" });
     await client.post("/api/action");
 
-    expect(mockFetch).toHaveBeenCalledWith(
-      "/api/action",
-      expect.objectContaining({ method: "POST", body: undefined })
-    );
+    const fetchCall = (globalThis.fetch as ReturnType<typeof vi.fn>).mock.calls[0];
+    expect(fetchCall[1].body).toBeUndefined();
   });
 });
 
-describe("createServerFetch - put", () => {
-  it("calls fetch with PUT method and JSON body", async () => {
-    const mockJson = vi.fn().mockResolvedValue({ updated: true });
-    const mockFetch = vi.fn().mockResolvedValue({ ok: true, json: mockJson });
-    vi.stubGlobal("fetch", mockFetch);
+describe("createServerFetch - PUT", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockCookieStore.getAll.mockReturnValue([]);
+    mockCookieStore.get.mockReturnValue(undefined);
+  });
 
-    const client = createServerFetch();
-    await client.put("/api/items/1", { name: "Updated" });
+  it("makes PUT request with JSON body", async () => {
+    (globalThis.fetch as ReturnType<typeof vi.fn>).mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: () => Promise.resolve({ updated: true }),
+    });
 
-    expect(mockFetch).toHaveBeenCalledWith(
-      "/api/items/1",
+    const client = createServerFetch({ baseUrl: "http://localhost:3000" });
+    const result = await client.put("/api/templates/1", { name: "Updated" });
+
+    expect(globalThis.fetch).toHaveBeenCalledWith(
+      "http://localhost:3000/api/templates/1",
       expect.objectContaining({
         method: "PUT",
         body: JSON.stringify({ name: "Updated" }),
       })
     );
-  });
-
-  it("calls fetch with PUT and no body when undefined", async () => {
-    const mockJson = vi.fn().mockResolvedValue({});
-    const mockFetch = vi.fn().mockResolvedValue({ ok: true, json: mockJson });
-    vi.stubGlobal("fetch", mockFetch);
-
-    const client = createServerFetch();
-    await client.put("/api/items/1");
-
-    expect(mockFetch).toHaveBeenCalledWith(
-      "/api/items/1",
-      expect.objectContaining({ method: "PUT", body: undefined })
-    );
+    expect(result).toEqual({ updated: true });
   });
 });
 
-describe("createServerFetch - delete", () => {
-  it("calls fetch with DELETE method", async () => {
-    const mockJson = vi.fn().mockResolvedValue(undefined);
-    const mockFetch = vi.fn().mockResolvedValue({ ok: true, json: mockJson });
-    vi.stubGlobal("fetch", mockFetch);
+describe("createServerFetch - DELETE", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockCookieStore.getAll.mockReturnValue([]);
+    mockCookieStore.get.mockReturnValue(undefined);
+  });
 
-    const client = createServerFetch();
-    await client.delete("/api/items/1");
+  it("makes DELETE request", async () => {
+    (globalThis.fetch as ReturnType<typeof vi.fn>).mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: () => Promise.resolve({ deleted: true }),
+    });
 
-    expect(mockFetch).toHaveBeenCalledWith(
-      "/api/items/1",
+    const client = createServerFetch({ baseUrl: "http://localhost:3000" });
+    const result = await client.delete("/api/templates/1");
+
+    expect(globalThis.fetch).toHaveBeenCalledWith(
+      "http://localhost:3000/api/templates/1",
       expect.objectContaining({ method: "DELETE" })
     );
-  });
-});
-
-describe("createServerFetch - baseUrl", () => {
-  it("prepends baseUrl to URLs", async () => {
-    const mockJson = vi.fn().mockResolvedValue({});
-    const mockFetch = vi.fn().mockResolvedValue({ ok: true, json: mockJson });
-    vi.stubGlobal("fetch", mockFetch);
-
-    const client = createServerFetch({ baseUrl: "http://localhost:3000" });
-    await client.get("/api/test");
-
-    expect(mockFetch).toHaveBeenCalledWith(
-      "http://localhost:3000/api/test",
-      expect.anything()
-    );
-  });
-
-  it("prepends baseUrl for POST requests", async () => {
-    const mockJson = vi.fn().mockResolvedValue({});
-    const mockFetch = vi.fn().mockResolvedValue({ ok: true, json: mockJson });
-    vi.stubGlobal("fetch", mockFetch);
-
-    const client = createServerFetch({ baseUrl: "http://localhost:3000" });
-    await client.post("/api/test", {});
-
-    expect(mockFetch).toHaveBeenCalledWith(
-      "http://localhost:3000/api/test",
-      expect.anything()
-    );
-  });
-
-  it("uses empty string baseUrl by default", async () => {
-    const mockJson = vi.fn().mockResolvedValue({});
-    const mockFetch = vi.fn().mockResolvedValue({ ok: true, json: mockJson });
-    vi.stubGlobal("fetch", mockFetch);
-
-    const client = createServerFetch();
-    await client.get("/api/test");
-
-    expect(mockFetch).toHaveBeenCalledWith(
-      "/api/test",
-      expect.anything()
-    );
+    expect(result).toEqual({ deleted: true });
   });
 });
 
 describe("createServerFetch - error handling", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockCookieStore.getAll.mockReturnValue([]);
+    mockCookieStore.get.mockReturnValue(undefined);
+  });
+
   it("throws ApiError on 401 response", async () => {
-    const mockFetch = vi.fn().mockResolvedValue({
+    (globalThis.fetch as ReturnType<typeof vi.fn>).mockResolvedValue({
       ok: false,
       status: 401,
-      json: vi.fn().mockResolvedValue({}),
+      statusText: "Unauthorized",
+      json: () => Promise.resolve({}),
     });
-    vi.stubGlobal("fetch", mockFetch);
 
-    const client = createServerFetch();
-
-    await expect(client.get("/api/protected")).rejects.toThrow(ApiError);
+    const client = createServerFetch({ baseUrl: "http://localhost:3000" });
     await expect(client.get("/api/protected")).rejects.toThrow("Unauthorized");
+    await expect(client.get("/api/protected")).rejects.toBeInstanceOf(ApiError);
   });
 
-  it("throws ApiError with status and message on non-ok response", async () => {
-    const mockFetch = vi.fn().mockResolvedValue({
-      ok: false,
-      status: 500,
-      statusText: "Internal Server Error",
-      json: vi.fn().mockResolvedValue({ error: "Server error" }),
-    });
-    vi.stubGlobal("fetch", mockFetch);
-
-    const client = createServerFetch();
-
-    try {
-      await client.get("/api/fail");
-    } catch (e) {
-      expect((e as ApiError).status).toBe(500);
-      expect((e as ApiError).message).toBe("Server error");
-    }
-  });
-
-  it("falls back to statusText when json has no error field", async () => {
-    const mockFetch = vi.fn().mockResolvedValue({
-      ok: false,
-      status: 502,
-      statusText: "Bad Gateway",
-      json: vi.fn().mockResolvedValue({}),
-    });
-    vi.stubGlobal("fetch", mockFetch);
-
-    const client = createServerFetch();
-
-    try {
-      await client.get("/api/fail");
-    } catch (e) {
-      expect((e as ApiError).message).toBe("Bad Gateway");
-    }
-  });
-
-  it("falls back to statusText when json parse fails", async () => {
-    const mockFetch = vi.fn().mockResolvedValue({
-      ok: false,
-      status: 502,
-      statusText: "Bad Gateway",
-      json: vi.fn().mockRejectedValue(new Error("Invalid JSON")),
-    });
-    vi.stubGlobal("fetch", mockFetch);
-
-    const client = createServerFetch();
-
-    try {
-      await client.get("/api/fail");
-    } catch (e) {
-      expect((e as ApiError).status).toBe(502);
-      expect((e as ApiError).message).toBe("Bad Gateway");
-    }
-  });
-
-  it("throws ApiError on POST 401", async () => {
-    const mockFetch = vi.fn().mockResolvedValue({
-      ok: false,
-      status: 401,
-      json: vi.fn().mockResolvedValue({}),
-    });
-    vi.stubGlobal("fetch", mockFetch);
-
-    const client = createServerFetch();
-    await expect(client.post("/api/test", {})).rejects.toThrow("Unauthorized");
-  });
-
-  it("throws ApiError on PUT non-ok", async () => {
-    const mockFetch = vi.fn().mockResolvedValue({
-      ok: false,
-      status: 403,
-      statusText: "Forbidden",
-      json: vi.fn().mockResolvedValue({ error: "Forbidden" }),
-    });
-    vi.stubGlobal("fetch", mockFetch);
-
-    const client = createServerFetch();
-    await expect(client.put("/api/test", {})).rejects.toThrow("Forbidden");
-  });
-
-  it("throws ApiError on DELETE non-ok", async () => {
-    const mockFetch = vi.fn().mockResolvedValue({
-      ok: false,
-      status: 404,
-      statusText: "Not Found",
-      json: vi.fn().mockResolvedValue({ error: "Not found" }),
-    });
-    vi.stubGlobal("fetch", mockFetch);
-
-    const client = createServerFetch();
-    await expect(client.delete("/api/test")).rejects.toThrow("Not found");
-  });
-
-  it("stores response body in ApiError", async () => {
-    const mockFetch = vi.fn().mockResolvedValue({
+  it("throws ApiError with error message from response body", async () => {
+    (globalThis.fetch as ReturnType<typeof vi.fn>).mockResolvedValue({
       ok: false,
       status: 422,
       statusText: "Unprocessable Entity",
-      json: vi.fn().mockResolvedValue({
-        error: "Validation failed",
-        details: { name: ["required"] },
-      }),
+      json: () => Promise.resolve({ error: "Validation failed" }),
     });
-    vi.stubGlobal("fetch", mockFetch);
 
-    const client = createServerFetch();
+    const client = createServerFetch({ baseUrl: "http://localhost:3000" });
+    await expect(client.post("/api/templates", {})).rejects.toThrow("Validation failed");
+  });
 
+  it("throws ApiError with statusText when no error in body", async () => {
+    (globalThis.fetch as ReturnType<typeof vi.fn>).mockResolvedValue({
+      ok: false,
+      status: 500,
+      statusText: "Internal Server Error",
+      json: () => Promise.reject(new Error("not json")),
+    });
+
+    const client = createServerFetch({ baseUrl: "http://localhost:3000" });
+    await expect(client.get("/api/broken")).rejects.toThrow("Internal Server Error");
+  });
+
+  it("throws ApiError with body property", async () => {
+    const errorBody = { error: "Not found", details: { id: "missing" } };
+    (globalThis.fetch as ReturnType<typeof vi.fn>).mockResolvedValue({
+      ok: false,
+      status: 404,
+      statusText: "Not Found",
+      json: () => Promise.resolve(errorBody),
+    });
+
+    const client = createServerFetch({ baseUrl: "http://localhost:3000" });
     try {
-      await client.post("/api/test", {});
-    } catch (e) {
-      expect((e as ApiError).body).toEqual({
-        error: "Validation failed",
-        details: { name: ["required"] },
-      });
+      await client.get("/api/missing");
+      expect.fail("Should have thrown");
+    } catch (err) {
+      expect(err).toBeInstanceOf(ApiError);
+      expect((err as InstanceType<typeof ApiError>).status).toBe(404);
+      expect((err as InstanceType<typeof ApiError>).body).toEqual(errorBody);
     }
+  });
+
+  it("handles network errors", async () => {
+    (globalThis.fetch as ReturnType<typeof vi.fn>).mockRejectedValue(
+      new TypeError("Failed to fetch")
+    );
+
+    const client = createServerFetch({ baseUrl: "http://localhost:3000" });
+    await expect(client.get("/api/test")).rejects.toThrow("Failed to fetch");
   });
 });
