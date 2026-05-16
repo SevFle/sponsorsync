@@ -54,13 +54,14 @@ describe("DashboardLayout - auth redirect", () => {
     expect(result).toBeDefined();
   });
 
-  it("allows session with user object but no id (passes null check)", async () => {
+  it("redirects session with user object but no id (requireAuth validates user ID)", async () => {
     mockAuth({ user: {} } as any);
     const { default: DashboardLayout } = await import("@/app/(dashboard)/layout");
 
-    const result = await DashboardLayout({ children: <div>test</div> });
-    expect(redirect).not.toHaveBeenCalled();
-    expect(result).toBeDefined();
+    await expect(
+      DashboardLayout({ children: <div>test</div> })
+    ).rejects.toThrow("NEXT_REDIRECT");
+    expect(redirect).toHaveBeenCalledWith("/login");
   });
 
   it("redirects when session is explicitly undefined", async () => {
