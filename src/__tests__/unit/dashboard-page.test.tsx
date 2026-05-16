@@ -1,28 +1,36 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, fireEvent } from "@testing-library/react";
 
-vi.mock("@/lib/auth/guard", () => ({
-  requireAuth: vi.fn(),
+vi.mock("@/hooks/use-auth", () => ({
+  useAuth: vi.fn(),
 }));
 
-const mockGetDashboardData = vi.fn();
-
-vi.mock("@/lib/dashboard/data", () => ({
-  getDashboardData: (...args: unknown[]) => mockGetDashboardData(...args),
+vi.mock("@/lib/api-client", () => ({
+  apiFetch: vi.fn(),
 }));
 
-import { requireAuth } from "@/lib/auth/guard";
+vi.mock("next/navigation", () => ({
+  useRouter: vi.fn(() => ({
+    replace: vi.fn(),
+    push: vi.fn(),
+  })),
+  usePathname: vi.fn(() => "/dashboard"),
+}));
 
-const mockSession = { user: { id: "user-1", email: "test@test.com", name: "Test User" } };
+import { useAuth } from "@/hooks/use-auth";
+import { apiFetch } from "@/lib/api-client";
 
-function mockAuth(session: typeof mockSession | null) {
-  if (session) {
-    (requireAuth as ReturnType<typeof vi.fn>).mockResolvedValue(session);
-  } else {
-    (requireAuth as ReturnType<typeof vi.fn>).mockImplementation(() => {
-      throw new Error("NEXT_REDIRECT");
-    });
-  }
+const mockSession = {
+  user: { id: "user-1", email: "test@test.com", name: "Test User" },
+};
+
+function setAuth(authenticated: boolean) {
+  (useAuth as ReturnType<typeof vi.fn>).mockReturnValue({
+    session: authenticated ? mockSession : null,
+    status: authenticated ? "authenticated" : "unauthenticated",
+    isLoading: false,
+    isAuthenticated: authenticated,
+  });
 }
 
 const futureDate = (daysFromNow: number) => {
@@ -138,7 +146,7 @@ const mockPayments = [
   },
 ];
 
-function mockApiFetch(overrides: Partial<{
+function mockApiResponse(overrides: Partial<{
   deals: any[];
   deliverables: any[];
   payments: any[];
@@ -161,97 +169,193 @@ function mockApiFetch(overrides: Partial<{
       (p.status === "pending" && p.dueDate && new Date(p.dueDate) < new Date())
   ).length;
 
-  mockGetDashboardData.mockResolvedValue({
+  (apiFetch as ReturnType<typeof vi.fn>).mockResolvedValue({
     deals,
     deliverables,
     payments,
-    metrics: { activeDeals, draftDeals, completedDeals, revenueMtd, pendingDeliverables, overduePayments },
+    metrics: {
+      activeDeals,
+      draftDeals,
+      completedDeals,
+      revenueMtd,
+      pendingDeliverables,
+      overduePayments,
+    },
   });
 }
 
 beforeEach(() => {
   vi.clearAllMocks();
-  mockAuth(mockSession);
-  mockApiFetch();
+  setAuth(true);
+  mockApiResponse();
 });
 
-describe("DashboardPage - server-side auth guard", () => {
-  it("redirects to /login when not authenticated", async () => {
-    mockAuth(null);
-    const { default: DashboardPage } = await import("@/app/(dashboard)/page");
+describe("DashboardPage - auth guard", () => {
+  it("returns null when unauthenticated", async () => {
+    setAuth(false);
+    const { default: DashboardPage } = await import(
+      "@/app/(dashboard)/page"
+    );
 
-    await expect(DashboardPage()).rejects.toThrow("NEXT_REDIRECT");
-    expect(requireAuth).toHaveBeenCalled();
+    const { container } = render(<DashboardPage />);
+    expect(container.innerHTML).toBe("");
+    expect(apiFetch).not.toHaveBeenCalled();
   });
 
-  it("does not redirect when authenticated", async () => {
-    mockAuth(mockSession);
-    mockApiFetch();
-    const { default: DashboardPage } = await import("@/app/(dashboard)/page");
+  it("renders content when authenticated", async () => {
+    mockApiResponse();
+    const { default: DashboardPage } = await import(
+      "@/app/(dashboard)/page"
+    );
 
-    const result = await DashboardPage();
-    expect(result).toBeDefined();
+    render(<DashboardPage />);
+
+    await waitFor(() => {
+      expect(screen.getByText("Dashboard")).toBeInTheDocument();
+    });
   });
 
-  it("does not make fetch calls when unauthenticated", async () => {
-    mockAuth(null);
-    const { default: DashboardPage } = await import("@/app/(dashboard)/page");
+  it("does not call apiFetch when unauthenticated", async () => {
+    setAuth(false);
+    const { default: DashboardPage } = await import(
+      "@/app/(dashboard)/page"
+    );
 
-    await expect(DashboardPage()).rejects.toThrow("NEXT_REDIRECT");
-    expect(mockGetDashboardData).not.toHaveBeenCalled();
+    render(<DashboardPage />);
+    expect(apiFetch).not.toHaveBeenCalled();
   });
 });
 
-describe("DashboardPage - server-side data fetching", () => {
-  it("calls getDashboardData with authenticated user id", async () => {
-    mockApiFetch();
-    const { default: DashboardPage } = await import("@/app/(dashboard)/page");
+describe("DashboardPage - centralized API fetch", () => {
+  it("calls apiFetch with /api/dashboard endpoint", async () => {
+    mockApiResponse();
+    const { default: DashboardPage } = await import(
+      "@/app/(dashboard)/page"
+    );
 
-    await DashboardPage();
+    render(<DashboardPage />);
 
-    expect(mockGetDashboardData).toHaveBeenCalledWith("user-1");
+    await waitFor(() => {
+      expect(apiFetch).toHaveBeenCalledWith(
+        "/api/dashboard",
+        expect.objectContaining({ signal: expect.any(AbortSignal) })
+      );
+    });
   });
 
-  it("fetches all data via single consolidated call", async () => {
-    mockApiFetch({
+  it("makes exactly one API call on mount", async () => {
+    mockApiResponse();
+    const { default: DashboardPage } = await import(
+      "@/app/(dashboard)/page"
+    );
+
+    render(<DashboardPage />);
+
+    await waitFor(() => {
+      expect(apiFetch).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  it("shows loading skeleton while fetching", async () => {
+    let resolvePromise: (value: any) => void;
+    (apiFetch as ReturnType<typeof vi.fn>).mockImplementation(
+      () => new Promise((resolve) => {
+        resolvePromise = resolve;
+      })
+    );
+
+    const { default: DashboardPage } = await import(
+      "@/app/(dashboard)/page"
+    );
+
+    render(<DashboardPage />);
+
+    expect(screen.getByText("Dashboard")).toBeInTheDocument();
+    expect(apiFetch).toHaveBeenCalled();
+
+    resolvePromise!({
+      deals: [],
+      deliverables: [],
+      payments: [],
+      metrics: {
+        activeDeals: 0,
+        draftDeals: 0,
+        completedDeals: 0,
+        revenueMtd: 0,
+        pendingDeliverables: 0,
+        overduePayments: 0,
+      },
+    });
+
+    await waitFor(() => {
+      expect(screen.getByText("Active Deals")).toBeInTheDocument();
+    });
+  });
+
+  it("shows error banner on fetch failure", async () => {
+    (apiFetch as ReturnType<typeof vi.fn>).mockRejectedValue(
+      new Error("Failed to fetch dashboard data")
+    );
+
+    const { default: DashboardPage } = await import(
+      "@/app/(dashboard)/page"
+    );
+
+    render(<DashboardPage />);
+
+    await waitFor(() => {
+      expect(
+        screen.getByText("Failed to fetch dashboard data")
+      ).toBeInTheDocument();
+    });
+    expect(screen.getByText("Try again")).toBeInTheDocument();
+  });
+
+  it("retries fetch when retry button is clicked", async () => {
+    (apiFetch as ReturnType<typeof vi.fn>).mockRejectedValueOnce(
+      new Error("Network error")
+    );
+    mockApiResponse({
       deals: mockDeals,
       deliverables: mockDeliverables,
       payments: mockPayments,
     });
-    const { default: DashboardPage } = await import("@/app/(dashboard)/page");
 
-    await DashboardPage();
+    const { default: DashboardPage } = await import(
+      "@/app/(dashboard)/page"
+    );
 
-    expect(mockGetDashboardData).toHaveBeenCalledTimes(1);
-  });
+    render(<DashboardPage />);
 
-  it("makes exactly one API call instead of three separate calls", async () => {
-    mockApiFetch({
-      deals: mockDeals,
-      deliverables: mockDeliverables,
-      payments: mockPayments,
+    await waitFor(() => {
+      expect(screen.getByText("Network error")).toBeInTheDocument();
     });
-    const { default: DashboardPage } = await import("@/app/(dashboard)/page");
 
-    await DashboardPage();
+    fireEvent.click(screen.getByText("Try again"));
 
-    expect(mockGetDashboardData).toHaveBeenCalledTimes(1);
+    await waitFor(() => {
+      expect(apiFetch).toHaveBeenCalledTimes(2);
+      expect(screen.getByText("Active Deals")).toBeInTheDocument();
+    });
   });
 });
 
 describe("DashboardPage - rendering", () => {
   it("renders all metric cards with correct values", async () => {
-    mockApiFetch({
+    mockApiResponse({
       deals: mockDeals,
       deliverables: mockDeliverables,
       payments: mockPayments,
     });
-    const { default: DashboardPage } = await import("@/app/(dashboard)/page");
+    const { default: DashboardPage } = await import(
+      "@/app/(dashboard)/page"
+    );
 
-    const result = await DashboardPage();
-    render(result as React.ReactElement);
+    render(<DashboardPage />);
 
-    expect(screen.getByText("Active Deals")).toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.getByText("Active Deals")).toBeInTheDocument();
+    });
     expect(screen.getByText("Revenue (MTD)")).toBeInTheDocument();
     expect(screen.getByText("Pending Deliverables")).toBeInTheDocument();
     expect(screen.getByText("Overdue Payments")).toBeInTheDocument();
@@ -260,18 +364,21 @@ describe("DashboardPage - rendering", () => {
   });
 
   it("renders upcoming deadlines section", async () => {
-    mockApiFetch({
+    mockApiResponse({
       deals: mockDeals,
       deliverables: mockDeliverables,
       payments: [],
     });
-    const { default: DashboardPage } = await import("@/app/(dashboard)/page");
+    const { default: DashboardPage } = await import(
+      "@/app/(dashboard)/page"
+    );
 
-    const result = await DashboardPage();
-    render(result as React.ReactElement);
+    render(<DashboardPage />);
 
     await waitFor(() => {
-      expect(screen.getByText("Episode 42 — Mid-roll Ad")).toBeInTheDocument();
+      expect(
+        screen.getByText("Episode 42 — Mid-roll Ad")
+      ).toBeInTheDocument();
     });
 
     expect(screen.getByText("Newsletter Feature")).toBeInTheDocument();
@@ -279,15 +386,16 @@ describe("DashboardPage - rendering", () => {
   });
 
   it("excludes verified and missed deliverables from upcoming", async () => {
-    mockApiFetch({
+    mockApiResponse({
       deals: [],
       deliverables: mockDeliverables,
       payments: [],
     });
-    const { default: DashboardPage } = await import("@/app/(dashboard)/page");
+    const { default: DashboardPage } = await import(
+      "@/app/(dashboard)/page"
+    );
 
-    const result = await DashboardPage();
-    render(result as React.ReactElement);
+    render(<DashboardPage />);
 
     await waitFor(() => {
       expect(screen.getByText("Upcoming Deadlines")).toBeInTheDocument();
@@ -298,15 +406,16 @@ describe("DashboardPage - rendering", () => {
   });
 
   it("renders recent activity from payments", async () => {
-    mockApiFetch({
+    mockApiResponse({
       deals: [],
       deliverables: [],
       payments: mockPayments,
     });
-    const { default: DashboardPage } = await import("@/app/(dashboard)/page");
+    const { default: DashboardPage } = await import(
+      "@/app/(dashboard)/page"
+    );
 
-    const result = await DashboardPage();
-    render(result as React.ReactElement);
+    render(<DashboardPage />);
 
     await waitFor(() => {
       expect(screen.getAllByText("Payment received").length).toBe(2);
@@ -318,31 +427,39 @@ describe("DashboardPage - rendering", () => {
   });
 
   it("renders deal pipeline summary cards", async () => {
-    mockApiFetch({
+    mockApiResponse({
       deals: mockDeals,
       deliverables: [],
       payments: [],
     });
-    const { default: DashboardPage } = await import("@/app/(dashboard)/page");
+    const { default: DashboardPage } = await import(
+      "@/app/(dashboard)/page"
+    );
 
-    const result = await DashboardPage();
-    render(result as React.ReactElement);
+    render(<DashboardPage />);
 
     await waitFor(() => {
       expect(screen.getByText("Deal Pipeline")).toBeInTheDocument();
     });
 
-    expect(screen.getByText("Draft deals awaiting review")).toBeInTheDocument();
-    expect(screen.getByText("Currently running sponsorships")).toBeInTheDocument();
-    expect(screen.getByText("Successfully finished deals")).toBeInTheDocument();
+    expect(
+      screen.getByText("Draft deals awaiting review")
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText("Currently running sponsorships")
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText("Successfully finished deals")
+    ).toBeInTheDocument();
   });
 
   it("renders quick action links", async () => {
-    mockApiFetch();
-    const { default: DashboardPage } = await import("@/app/(dashboard)/page");
+    mockApiResponse();
+    const { default: DashboardPage } = await import(
+      "@/app/(dashboard)/page"
+    );
 
-    const result = await DashboardPage();
-    render(result as React.ReactElement);
+    render(<DashboardPage />);
 
     await waitFor(() => {
       expect(screen.getByText("New Deal")).toBeInTheDocument();
@@ -360,15 +477,16 @@ describe("DashboardPage - rendering", () => {
   });
 
   it("renders pipeline cards as links to deals page", async () => {
-    mockApiFetch({
+    mockApiResponse({
       deals: mockDeals,
       deliverables: [],
       payments: [],
     });
-    const { default: DashboardPage } = await import("@/app/(dashboard)/page");
+    const { default: DashboardPage } = await import(
+      "@/app/(dashboard)/page"
+    );
 
-    const result = await DashboardPage();
-    render(result as React.ReactElement);
+    render(<DashboardPage />);
 
     await waitFor(() => {
       expect(screen.getByText("Deal Pipeline")).toBeInTheDocument();
@@ -383,24 +501,28 @@ describe("DashboardPage - rendering", () => {
 
 describe("DashboardPage - empty states", () => {
   it("shows empty state for upcoming deadlines when none exist", async () => {
-    mockApiFetch();
-    const { default: DashboardPage } = await import("@/app/(dashboard)/page");
+    mockApiResponse();
+    const { default: DashboardPage } = await import(
+      "@/app/(dashboard)/page"
+    );
 
-    const result = await DashboardPage();
-    render(result as React.ReactElement);
+    render(<DashboardPage />);
 
     await waitFor(() => {
       expect(screen.getByText("No upcoming deadlines")).toBeInTheDocument();
     });
-    expect(screen.getByText("All deliverables are up to date.")).toBeInTheDocument();
+    expect(
+      screen.getByText("All deliverables are up to date.")
+    ).toBeInTheDocument();
   });
 
   it("shows empty state for recent activity when none exist", async () => {
-    mockApiFetch();
-    const { default: DashboardPage } = await import("@/app/(dashboard)/page");
+    mockApiResponse();
+    const { default: DashboardPage } = await import(
+      "@/app/(dashboard)/page"
+    );
 
-    const result = await DashboardPage();
-    render(result as React.ReactElement);
+    render(<DashboardPage />);
 
     await waitFor(() => {
       expect(screen.getByText("No recent activity")).toBeInTheDocument();
@@ -411,26 +533,57 @@ describe("DashboardPage - empty states", () => {
   });
 });
 
-describe("DashboardPage - error propagation", () => {
-  it("propagates errors from getDashboardData", async () => {
-    mockGetDashboardData.mockRejectedValue(new Error("Failed to fetch dashboard data"));
-    const { default: DashboardPage } = await import("@/app/(dashboard)/page");
+describe("DashboardPage - error handling", () => {
+  it("shows error message from API failure", async () => {
+    (apiFetch as ReturnType<typeof vi.fn>).mockRejectedValue(
+      new Error("Failed to fetch dashboard data")
+    );
 
-    await expect(DashboardPage()).rejects.toThrow("Failed to fetch dashboard data");
+    const { default: DashboardPage } = await import(
+      "@/app/(dashboard)/page"
+    );
+
+    render(<DashboardPage />);
+
+    await waitFor(() => {
+      expect(
+        screen.getByText("Failed to fetch dashboard data")
+      ).toBeInTheDocument();
+    });
   });
 
-  it("propagates database connection errors", async () => {
-    mockGetDashboardData.mockRejectedValue(new Error("Database connection failed"));
-    const { default: DashboardPage } = await import("@/app/(dashboard)/page");
+  it("shows generic error for non-Error exceptions", async () => {
+    (apiFetch as ReturnType<typeof vi.fn>).mockRejectedValue("string error");
 
-    await expect(DashboardPage()).rejects.toThrow("Database connection failed");
+    const { default: DashboardPage } = await import(
+      "@/app/(dashboard)/page"
+    );
+
+    render(<DashboardPage />);
+
+    await waitFor(() => {
+      expect(
+        screen.getByText("Something went wrong")
+      ).toBeInTheDocument();
+    });
   });
 
-  it("propagates query errors from underlying data sources", async () => {
-    mockGetDashboardData.mockRejectedValue(new Error("Query failed"));
-    const { default: DashboardPage } = await import("@/app/(dashboard)/page");
+  it("shows error for database connection failure", async () => {
+    (apiFetch as ReturnType<typeof vi.fn>).mockRejectedValue(
+      new Error("Database connection failed")
+    );
 
-    await expect(DashboardPage()).rejects.toThrow("Query failed");
+    const { default: DashboardPage } = await import(
+      "@/app/(dashboard)/page"
+    );
+
+    render(<DashboardPage />);
+
+    await waitFor(() => {
+      expect(
+        screen.getByText("Database connection failed")
+      ).toBeInTheDocument();
+    });
   });
 });
 
@@ -444,15 +597,16 @@ describe("DashboardPage - boundary values", () => {
       sponsorName: "Sponsor",
     }));
 
-    mockApiFetch({
+    mockApiResponse({
       deals: [],
       deliverables: manyDeliverables,
       payments: [],
     });
-    const { default: DashboardPage } = await import("@/app/(dashboard)/page");
+    const { default: DashboardPage } = await import(
+      "@/app/(dashboard)/page"
+    );
 
-    const result = await DashboardPage();
-    render(result as React.ReactElement);
+    render(<DashboardPage />);
 
     await waitFor(() => {
       expect(screen.getByText("Upcoming Deadlines")).toBeInTheDocument();
@@ -474,15 +628,16 @@ describe("DashboardPage - boundary values", () => {
       sponsorName: `Sponsor ${i}`,
     }));
 
-    mockApiFetch({
+    mockApiResponse({
       deals: [],
       deliverables: [],
       payments: manyPayments,
     });
-    const { default: DashboardPage } = await import("@/app/(dashboard)/page");
+    const { default: DashboardPage } = await import(
+      "@/app/(dashboard)/page"
+    );
 
-    const result = await DashboardPage();
-    render(result as React.ReactElement);
+    render(<DashboardPage />);
 
     await waitFor(() => {
       expect(screen.getByText("Recent Activity")).toBeInTheDocument();
@@ -493,15 +648,16 @@ describe("DashboardPage - boundary values", () => {
   });
 
   it("handles zero value metrics", async () => {
-    mockApiFetch({
+    mockApiResponse({
       deals: [],
       deliverables: [],
       payments: [],
     });
-    const { default: DashboardPage } = await import("@/app/(dashboard)/page");
+    const { default: DashboardPage } = await import(
+      "@/app/(dashboard)/page"
+    );
 
-    const result = await DashboardPage();
-    render(result as React.ReactElement);
+    render(<DashboardPage />);
 
     await waitFor(() => {
       expect(screen.getByText("$0")).toBeInTheDocument();
@@ -510,20 +666,39 @@ describe("DashboardPage - boundary values", () => {
 
   it("sorts upcoming deliverables by due date ascending", async () => {
     const unsorted = [
-      { id: "dl1", title: "Later", dueDate: futureDate(10), status: "pending", sponsorName: "A" },
-      { id: "dl2", title: "Sooner", dueDate: futureDate(1), status: "pending", sponsorName: "B" },
-      { id: "dl3", title: "Middle", dueDate: futureDate(5), status: "pending", sponsorName: "C" },
+      {
+        id: "dl1",
+        title: "Later",
+        dueDate: futureDate(10),
+        status: "pending",
+        sponsorName: "A",
+      },
+      {
+        id: "dl2",
+        title: "Sooner",
+        dueDate: futureDate(1),
+        status: "pending",
+        sponsorName: "B",
+      },
+      {
+        id: "dl3",
+        title: "Middle",
+        dueDate: futureDate(5),
+        status: "pending",
+        sponsorName: "C",
+      },
     ];
 
-    mockApiFetch({
+    mockApiResponse({
       deals: [],
       deliverables: unsorted,
       payments: [],
     });
-    const { default: DashboardPage } = await import("@/app/(dashboard)/page");
+    const { default: DashboardPage } = await import(
+      "@/app/(dashboard)/page"
+    );
 
-    const result = await DashboardPage();
-    render(result as React.ReactElement);
+    render(<DashboardPage />);
 
     await waitFor(() => {
       expect(screen.getByText("Sooner")).toBeInTheDocument();
@@ -537,20 +712,48 @@ describe("DashboardPage - boundary values", () => {
 
   it("sorts recent payments by createdAt descending", async () => {
     const payments = [
-      { id: "p1", amount: 100, currency: "USD", status: "paid", dueDate: null, paidDate: null, createdAt: "2025-01-01T00:00:00Z", sponsorName: "OldCo" },
-      { id: "p2", amount: 200, currency: "USD", status: "paid", dueDate: null, paidDate: null, createdAt: "2025-06-01T00:00:00Z", sponsorName: "NewCo" },
-      { id: "p3", amount: 300, currency: "USD", status: "paid", dueDate: null, paidDate: null, createdAt: "2025-03-01T00:00:00Z", sponsorName: "MidCo" },
+      {
+        id: "p1",
+        amount: 100,
+        currency: "USD",
+        status: "paid",
+        dueDate: null,
+        paidDate: null,
+        createdAt: "2025-01-01T00:00:00Z",
+        sponsorName: "OldCo",
+      },
+      {
+        id: "p2",
+        amount: 200,
+        currency: "USD",
+        status: "paid",
+        dueDate: null,
+        paidDate: null,
+        createdAt: "2025-06-01T00:00:00Z",
+        sponsorName: "NewCo",
+      },
+      {
+        id: "p3",
+        amount: 300,
+        currency: "USD",
+        status: "paid",
+        dueDate: null,
+        paidDate: null,
+        createdAt: "2025-03-01T00:00:00Z",
+        sponsorName: "MidCo",
+      },
     ];
 
-    mockApiFetch({
+    mockApiResponse({
       deals: [],
       deliverables: [],
       payments,
     });
-    const { default: DashboardPage } = await import("@/app/(dashboard)/page");
+    const { default: DashboardPage } = await import(
+      "@/app/(dashboard)/page"
+    );
 
-    const result = await DashboardPage();
-    render(result as React.ReactElement);
+    render(<DashboardPage />);
 
     await waitFor(() => {
       expect(screen.getByText("NewCo — $200")).toBeInTheDocument();
@@ -562,20 +765,27 @@ describe("DashboardPage - boundary values", () => {
     expect(activities[2]).toHaveTextContent("OldCo");
   });
 
-  it("shows overdue label for past due deliverables", async () => {
+  it("excludes past due deliverables from upcoming", async () => {
     const overdueDeliverable = [
-      { id: "dl1", title: "Overdue Item", dueDate: pastDate(5), status: "in_progress", sponsorName: "Late Sponsor" },
+      {
+        id: "dl1",
+        title: "Overdue Item",
+        dueDate: pastDate(5),
+        status: "in_progress",
+        sponsorName: "Late Sponsor",
+      },
     ];
 
-    mockApiFetch({
+    mockApiResponse({
       deals: [],
       deliverables: overdueDeliverable,
       payments: [],
     });
-    const { default: DashboardPage } = await import("@/app/(dashboard)/page");
+    const { default: DashboardPage } = await import(
+      "@/app/(dashboard)/page"
+    );
 
-    const result = await DashboardPage();
-    render(result as React.ReactElement);
+    render(<DashboardPage />);
 
     await waitFor(() => {
       expect(screen.getByText("Upcoming Deadlines")).toBeInTheDocument();
@@ -587,18 +797,25 @@ describe("DashboardPage - boundary values", () => {
 
   it("shows days-left label for deliverables due soon", async () => {
     const soonDeliverable = [
-      { id: "dl1", title: "Due Soon", dueDate: futureDate(1), status: "pending", sponsorName: "Soon Sponsor" },
+      {
+        id: "dl1",
+        title: "Due Soon",
+        dueDate: futureDate(1),
+        status: "pending",
+        sponsorName: "Soon Sponsor",
+      },
     ];
 
-    mockApiFetch({
+    mockApiResponse({
       deals: [],
       deliverables: soonDeliverable,
       payments: [],
     });
-    const { default: DashboardPage } = await import("@/app/(dashboard)/page");
+    const { default: DashboardPage } = await import(
+      "@/app/(dashboard)/page"
+    );
 
-    const result = await DashboardPage();
-    render(result as React.ReactElement);
+    render(<DashboardPage />);
 
     await waitFor(() => {
       expect(screen.getByText("Due Soon")).toBeInTheDocument();
@@ -609,22 +826,36 @@ describe("DashboardPage - boundary values", () => {
 });
 
 describe("DashboardPage - session edge cases", () => {
-  it("handles session with minimal user data", async () => {
-    mockAuth({ user: { id: "u" } } as any);
-    mockApiFetch();
-    const { default: DashboardPage } = await import("@/app/(dashboard)/page");
+  it("renders dashboard with minimal session data", async () => {
+    (useAuth as ReturnType<typeof vi.fn>).mockReturnValue({
+      session: { user: { id: "u" } },
+      status: "authenticated",
+      isLoading: false,
+      isAuthenticated: true,
+    });
+    mockApiResponse();
+    const { default: DashboardPage } = await import(
+      "@/app/(dashboard)/page"
+    );
 
-    const result = await DashboardPage();
-    expect(result).toBeDefined();
-    expect(mockGetDashboardData).toHaveBeenCalled();
+    render(<DashboardPage />);
+
+    await waitFor(() => {
+      expect(screen.getByText("Dashboard")).toBeInTheDocument();
+    });
+    expect(apiFetch).toHaveBeenCalled();
   });
 
-  it("calls requireAuth exactly once per render", async () => {
-    mockApiFetch();
-    const { default: DashboardPage } = await import("@/app/(dashboard)/page");
+  it("calls apiFetch exactly once per mount", async () => {
+    mockApiResponse();
+    const { default: DashboardPage } = await import(
+      "@/app/(dashboard)/page"
+    );
 
-    await DashboardPage();
+    render(<DashboardPage />);
 
-    expect(requireAuth).toHaveBeenCalledTimes(1);
+    await waitFor(() => {
+      expect(apiFetch).toHaveBeenCalledTimes(1);
+    });
   });
 });
