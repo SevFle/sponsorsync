@@ -5,6 +5,16 @@ import { getSponsorsByUserId } from "@/lib/db/queries/sponsors";
 import { computeDashboardMetrics, type DashboardMetrics } from "@/lib/dashboard/metrics";
 import type { DashboardDeal, DashboardDeliverable, DashboardPayment } from "@/types/dashboard";
 
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+function isValidUserId(userId: string): boolean {
+  return typeof userId === "string" && userId.trim().length > 0;
+}
+
+function normalizeUserId(userId: string): string {
+  return userId.trim();
+}
+
 export interface DashboardDataResult {
   deals: DashboardDeal[];
   deliverables: DashboardDeliverable[];
@@ -13,16 +23,32 @@ export interface DashboardDataResult {
 }
 
 export async function getDashboardData(userId: string): Promise<DashboardDataResult> {
-  if (!userId?.trim()) {
+  if (!isValidUserId(userId)) {
     throw new Error("Invalid user ID: authentication required");
   }
 
-  const [deals, deliverables, payments, sponsors] = await Promise.all([
-    getDealsByUserId(userId),
-    getDeliverablesByUserId(userId),
-    getPaymentsByUserId(userId),
-    getSponsorsByUserId(userId),
+  const normalizedId = normalizeUserId(userId);
+
+  const results = await Promise.allSettled([
+    getDealsByUserId(normalizedId),
+    getDeliverablesByUserId(normalizedId),
+    getPaymentsByUserId(normalizedId),
+    getSponsorsByUserId(normalizedId),
   ]);
+
+  const [dealsResult, deliverablesResult, paymentsResult, sponsorsResult] = results;
+
+  if (dealsResult.status === "rejected") {
+    throw new Error(`Failed to load deals: ${dealsResult.reason instanceof Error ? dealsResult.reason.message : "Unknown error"}`);
+  }
+  if (sponsorsResult.status === "rejected") {
+    throw new Error(`Failed to load sponsors: ${sponsorsResult.reason instanceof Error ? sponsorsResult.reason.message : "Unknown error"}`);
+  }
+
+  const deals = dealsResult.value;
+  const sponsors = sponsorsResult.value;
+  const deliverables = deliverablesResult.status === "fulfilled" ? deliverablesResult.value : [];
+  const payments = paymentsResult.status === "fulfilled" ? paymentsResult.value : [];
 
   const sponsorMap = new Map(sponsors.map((s) => [s.id, s]));
   const dealMap = new Map(deals.map((d) => [d.id, d]));

@@ -9,7 +9,12 @@ export async function GET() {
   }
 
   const userId = session.user.id as string;
-  const data = await getDashboardData(userId);
 
-  return NextResponse.json(data);
+  try {
+    const data = await getDashboardData(userId);
+    return NextResponse.json(data);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Failed to load dashboard data";
+    return NextResponse.json({ error: message }, { status: 500 });
+  }
 }

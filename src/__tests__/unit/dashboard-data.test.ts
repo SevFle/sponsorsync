@@ -203,23 +203,33 @@ describe("getDashboardData - consolidation", () => {
     (getDeliverablesByUserId as ReturnType<typeof vi.fn>).mockResolvedValue([]);
     (getPaymentsByUserId as ReturnType<typeof vi.fn>).mockResolvedValue([]);
 
-    await expect(getDashboardData("user-1")).rejects.toThrow("DB error");
+    await expect(getDashboardData("user-1")).rejects.toThrow("Failed to load deals: DB error");
   });
 
-  it("propagates errors from deliverables query", async () => {
+  it("gracefully degrades when deliverables query fails", async () => {
     (getDealsByUserId as ReturnType<typeof vi.fn>).mockResolvedValue([]);
     (getDeliverablesByUserId as ReturnType<typeof vi.fn>).mockRejectedValue(new Error("Query failed"));
     (getPaymentsByUserId as ReturnType<typeof vi.fn>).mockResolvedValue([]);
 
-    await expect(getDashboardData("user-1")).rejects.toThrow("Query failed");
+    const result = await getDashboardData("user-1");
+
+    expect(result.deliverables).toEqual([]);
+    expect(result.deals).toEqual([]);
+    expect(result.payments).toEqual([]);
+    expect(result.metrics.activeDeals).toBe(0);
   });
 
-  it("propagates errors from payments query", async () => {
+  it("gracefully degrades when payments query fails", async () => {
     (getDealsByUserId as ReturnType<typeof vi.fn>).mockResolvedValue([]);
     (getDeliverablesByUserId as ReturnType<typeof vi.fn>).mockResolvedValue([]);
     (getPaymentsByUserId as ReturnType<typeof vi.fn>).mockRejectedValue(new Error("Connection refused"));
 
-    await expect(getDashboardData("user-1")).rejects.toThrow("Connection refused");
+    const result = await getDashboardData("user-1");
+
+    expect(result.payments).toEqual([]);
+    expect(result.deals).toEqual([]);
+    expect(result.deliverables).toEqual([]);
+    expect(result.metrics.overduePayments).toBe(0);
   });
 
   it("throws for null userId", async () => {
@@ -328,7 +338,7 @@ describe("getDashboardData - consolidation", () => {
     (getDeliverablesByUserId as ReturnType<typeof vi.fn>).mockResolvedValue([]);
     (getPaymentsByUserId as ReturnType<typeof vi.fn>).mockResolvedValue([]);
 
-    await expect(getDashboardData("user-1")).rejects.toThrow("Sponsor query failed");
+    await expect(getDashboardData("user-1")).rejects.toThrow("Failed to load sponsors: Sponsor query failed");
   });
 
   it("returns deal with null totalValue and endDate", async () => {

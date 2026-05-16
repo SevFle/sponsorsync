@@ -343,35 +343,60 @@ describe("GET /api/dashboard - edge cases", () => {
   });
 });
 
-describe("GET /api/dashboard - error propagation", () => {
-  it("propagates database errors from deals query", async () => {
+describe("GET /api/dashboard - error handling", () => {
+  it("returns 500 when deals query fails", async () => {
     (getDealsByUserId as ReturnType<typeof vi.fn>).mockRejectedValue(
       new Error("Database connection failed")
     );
     (getDeliverablesByUserId as ReturnType<typeof vi.fn>).mockResolvedValue([]);
     (getPaymentsByUserId as ReturnType<typeof vi.fn>).mockResolvedValue([]);
 
-    await expect(GET()).rejects.toThrow("Database connection failed");
+    const response = await GET();
+    expect(response.status).toBe(500);
+    const body = await response.json();
+    expect(body.error).toContain("Database connection failed");
   });
 
-  it("propagates database errors from deliverables query", async () => {
+  it("returns 500 when sponsors query fails", async () => {
+    (getSponsorsByUserId as ReturnType<typeof vi.fn>).mockRejectedValue(
+      new Error("Sponsor query error")
+    );
+    (getDealsByUserId as ReturnType<typeof vi.fn>).mockResolvedValue([]);
+    (getDeliverablesByUserId as ReturnType<typeof vi.fn>).mockResolvedValue([]);
+    (getPaymentsByUserId as ReturnType<typeof vi.fn>).mockResolvedValue([]);
+
+    const response = await GET();
+    expect(response.status).toBe(500);
+    const body = await response.json();
+    expect(body.error).toContain("Sponsor query error");
+  });
+
+  it("returns 200 with empty deliverables when deliverables query fails", async () => {
     (getDealsByUserId as ReturnType<typeof vi.fn>).mockResolvedValue([]);
     (getDeliverablesByUserId as ReturnType<typeof vi.fn>).mockRejectedValue(
       new Error("Query timeout")
     );
     (getPaymentsByUserId as ReturnType<typeof vi.fn>).mockResolvedValue([]);
 
-    await expect(GET()).rejects.toThrow("Query timeout");
+    const response = await GET();
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body.deliverables).toEqual([]);
   });
 
-  it("propagates database errors from payments query", async () => {
+  it("returns 200 with empty payments when payments query fails", async () => {
     (getDealsByUserId as ReturnType<typeof vi.fn>).mockResolvedValue([]);
     (getDeliverablesByUserId as ReturnType<typeof vi.fn>).mockResolvedValue([]);
     (getPaymentsByUserId as ReturnType<typeof vi.fn>).mockRejectedValue(
       new Error("Connection refused")
     );
 
-    await expect(GET()).rejects.toThrow("Connection refused");
+    const response = await GET();
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body.payments).toEqual([]);
   });
 });
 
