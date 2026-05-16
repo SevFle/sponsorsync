@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { getAuthenticatedSession } from "@/lib/auth/guard";
 import { getTemplatesByUserIdFiltered, createTemplate } from "@/lib/db/queries/templates";
-import { DEFAULT_TEMPLATES } from "@/lib/templates/templateDefaults";
+import { createTemplateSchema } from "@/domain/templates";
 
 export async function GET(request: Request) {
   const session = await getAuthenticatedSession();
@@ -35,24 +35,24 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
   }
 
-  const name = (body as Record<string, unknown>).name;
-  if (!body || typeof body !== "object" || !("name" in body) || typeof name !== "string" || !name.trim()) {
-    return NextResponse.json({ error: "Name is required" }, { status: 422 });
-  }
-
-  const data = body as Record<string, unknown>;
-
-  if ("body" in data && typeof data.body !== "string") {
-    return NextResponse.json({ error: "Body must be a string" }, { status: 422 });
+  const parsed = createTemplateSchema.safeParse(body);
+  if (!parsed.success) {
+    return NextResponse.json(
+      {
+        error: "Validation failed",
+        details: parsed.error.flatten().fieldErrors,
+      },
+      { status: 422 }
+    );
   }
 
   try {
     const template = await createTemplate({
       userId: session.user.id,
-      name: (data.name as string).trim(),
-      subject: typeof data.subject === "string" ? data.subject : null,
-      body: typeof data.body === "string" ? data.body : "",
-      category: typeof data.category === "string" ? data.category : null,
+      name: parsed.data.name,
+      subject: parsed.data.subject,
+      body: parsed.data.body,
+      category: parsed.data.category,
       isDefault: false,
     });
     return NextResponse.json({ template }, { status: 201 });

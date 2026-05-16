@@ -78,7 +78,7 @@ describe("POST /api/templates", () => {
       name: "Welcome Email",
       subject: "Welcome to {{deal}}",
       body: "<p>Hello!</p>",
-      category: "onboarding",
+      category: "outreach",
     };
     const request = new Request("http://localhost:3000/api/templates", {
       method: "POST",
