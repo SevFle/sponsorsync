@@ -1,5 +1,3 @@
-import { formatCurrency } from "@/lib/format";
-
 interface MetricCardEnhancedProps {
   label: string;
   value: string | number;

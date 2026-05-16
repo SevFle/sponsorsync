@@ -2,7 +2,7 @@ import { db } from "@/lib/db";
 import { users, notificationPreferences, payments, deals } from "@/lib/db/schema";
 import { eq, and, isNotNull, lt, sql } from "drizzle-orm";
 import { differenceInDays, format } from "date-fns";
-import { createNotification } from "@/lib/db/queries/notifications";
+import { createNotification, notificationKeyExists } from "@/lib/db/queries/notifications";
 import { sendPaymentFollowUp } from "@/lib/email/templates";
 
 export interface PaymentFollowUpSummary {
@@ -61,12 +61,17 @@ export async function processPaymentFollowUps(): Promise<PaymentFollowUpSummary>
           currency: payment.currency ?? "USD",
         }).format(payment.amount / 100);
 
+        const notifKey = `payment_follow_up:${payment.id}`;
+        const alreadyNotified = await notificationKeyExists(notifKey);
+        if (alreadyNotified) continue;
+
         await createNotification({
           userId: user.userId,
           type: "payment_follow_up",
           title: "Overdue Payment",
           message: `Payment of ${formattedAmount} for ${payment.dealTitle} was due ${format(new Date(payment.dueDate!), "MMM d, yyyy")} (${daysOverdue} day${daysOverdue !== 1 ? "s" : ""} overdue)`,
           relatedId: payment.dealId,
+          notificationKey: notifKey,
         });
         summary.notificationsCreated++;
 

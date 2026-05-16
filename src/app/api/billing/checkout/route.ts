@@ -9,14 +9,20 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  let body: unknown;
-  try {
-    body = await request.json();
-  } catch {
-    return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
+  let planId: string | undefined;
+  const contentType = request.headers.get("content-type") ?? "";
+  if (contentType.includes("application/json")) {
+    let body: unknown;
+    try {
+      body = await request.json();
+    } catch {
+      return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
+    }
+    planId = (body as { planId?: string }).planId;
+  } else {
+    const formData = await request.formData();
+    planId = formData.get("planId") as string | null ?? undefined;
   }
-
-  const { planId } = body as { planId?: string };
 
   if (!planId || !isValidPlan(planId)) {
     return NextResponse.json(

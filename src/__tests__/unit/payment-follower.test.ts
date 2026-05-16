@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 
 const mocks = vi.hoisted(() => ({
   createNotification: vi.fn(),
+  notificationKeyExists: vi.fn().mockResolvedValue(false),
   sendPaymentFollowUp: vi.fn().mockResolvedValue({ id: "email-1" }),
 }));
 
@@ -44,6 +45,7 @@ vi.mock("drizzle-orm", () => ({
 
 vi.mock("@/lib/db/queries/notifications", () => ({
   createNotification: mocks.createNotification,
+  notificationKeyExists: mocks.notificationKeyExists,
 }));
 
 vi.mock("@/lib/email/templates", () => ({

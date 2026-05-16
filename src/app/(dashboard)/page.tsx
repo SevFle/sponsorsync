@@ -48,7 +48,7 @@ export default async function DashboardPage() {
   const payments = data.payments;
   const metrics = data.metrics;
 
-  const upcomingDeliverables = getUpcomingDeliverables(deliverables as DashboardDeliverable[]);
+  const upcomingDeliverables = getUpcomingDeliverables(deliverables);
   const recentActivity = getRecentActivity(payments);
 
   return (

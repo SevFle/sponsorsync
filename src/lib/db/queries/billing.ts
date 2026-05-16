@@ -2,6 +2,16 @@ import { db } from "..";
 import { users } from "../schema";
 import { eq } from "drizzle-orm";
 
+type SubscriptionStatus = "active" | "past_due" | "canceled" | "trialing" | "paused" | "free";
+
+interface SubscriptionUpdateData {
+  stripeSubscriptionId?: string | null;
+  stripePriceId?: string | null;
+  subscriptionStatus: SubscriptionStatus;
+  currentPeriodStart?: Date | null;
+  currentPeriodEnd?: Date | null;
+}
+
 export async function getUserWithBilling(userId: string) {
   const [user] = await db
     .select({
@@ -35,26 +45,20 @@ export async function updateStripeCustomerId(userId: string, customerId: string)
 
 export async function updateSubscriptionStatus(
   userId: string,
-  data: {
-    stripeSubscriptionId?: string | null;
-    stripePriceId?: string | null;
-    subscriptionStatus: "active" | "past_due" | "canceled" | "trialing" | "paused" | "free";
-    currentPeriodStart?: Date | null;
-    currentPeriodEnd?: Date | null;
-  }
+  data: SubscriptionUpdateData
 ) {
-  const cleanedData: Record<string, unknown> = {
+  const updateFields: Record<string, unknown> = {
     subscriptionStatus: data.subscriptionStatus,
     updatedAt: new Date(),
   };
-  if (data.stripeSubscriptionId !== undefined) cleanedData.stripeSubscriptionId = data.stripeSubscriptionId;
-  if (data.stripePriceId !== undefined) cleanedData.stripePriceId = data.stripePriceId;
-  if (data.currentPeriodStart !== undefined) cleanedData.currentPeriodStart = data.currentPeriodStart;
-  if (data.currentPeriodEnd !== undefined) cleanedData.currentPeriodEnd = data.currentPeriodEnd;
+  if (data.stripeSubscriptionId !== undefined) updateFields.stripeSubscriptionId = data.stripeSubscriptionId;
+  if (data.stripePriceId !== undefined) updateFields.stripePriceId = data.stripePriceId;
+  if (data.currentPeriodStart !== undefined) updateFields.currentPeriodStart = data.currentPeriodStart;
+  if (data.currentPeriodEnd !== undefined) updateFields.currentPeriodEnd = data.currentPeriodEnd;
 
   const [user] = await db
     .update(users)
-    .set(cleanedData)
+    .set(updateFields as Partial<typeof users.$inferInsert>)
     .where(eq(users.id, userId))
     .returning();
   return user;

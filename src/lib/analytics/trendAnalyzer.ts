@@ -1,4 +1,4 @@
-import { formatMonthKey, parseFlexibleDate, type DateRange } from "./dateRangeHelper";
+import { formatMonthKey, formatWeekKey, parseFlexibleDate, type DateRange } from "./dateRangeHelper";
 import type { PaymentLike } from "./revenueAggregator";
 import type { DeliverableLike } from "./deliverableMetrics";
 import type { DealLike } from "./pipelineCalculator";
@@ -35,7 +35,7 @@ function groupByPeriod(
     if (!item.date) continue;
     const key = granularity === "monthly"
       ? formatMonthKey(item.date)
-      : formatMonthKey(item.date);
+      : formatWeekKey(item.date);
     map.set(key, (map.get(key) ?? 0) + item.value);
   }
 

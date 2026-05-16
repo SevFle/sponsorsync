@@ -434,8 +434,8 @@ export default function PaymentsPage() {
         body: JSON.stringify({ status: newStatus }),
       });
       fetchData();
-    } catch {
-      // error handled silently
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to update payment status");
     }
   }, [fetchData]);
 

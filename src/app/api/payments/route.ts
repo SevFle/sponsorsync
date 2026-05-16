@@ -1,8 +1,7 @@
 import { NextResponse } from "next/server";
 import { getAuthenticatedSession } from "@/lib/auth/guard";
 import { getPaymentsByUserId, createPayment } from "@/lib/db/queries/payments";
-import { getDealsByUserId } from "@/lib/db/queries/deals";
-import { getDealById } from "@/lib/db/queries/deals";
+import { getDealsByUserId, getDealById } from "@/lib/db/queries/deals";
 import { getSponsorsByUserId } from "@/lib/db/queries/sponsors";
 import { createPaymentSchema } from "@/domain/payments";
 

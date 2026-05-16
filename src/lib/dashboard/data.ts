@@ -5,8 +5,6 @@ import { getSponsorsByUserId } from "@/lib/db/queries/sponsors";
 import { computeDashboardMetrics, type DashboardMetrics } from "@/lib/dashboard/metrics";
 import type { DashboardDeal, DashboardDeliverable, DashboardPayment } from "@/types/dashboard";
 
-const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-
 function isValidUserId(userId: string): boolean {
   return typeof userId === "string" && userId.trim().length > 0;
 }

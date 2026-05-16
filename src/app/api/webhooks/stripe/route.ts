@@ -9,17 +9,36 @@ import {
 import type Stripe from "stripe";
 
 async function handleSubscriptionChange(subscription: Stripe.Subscription) {
-  const userId = subscription.metadata?.userId;
-  if (!userId) return;
+  let userId = subscription.metadata?.userId;
+  if (!userId) {
+    const customerId =
+      typeof subscription.customer === "string"
+        ? subscription.customer
+        : subscription.customer?.id;
+    if (customerId) {
+      const user = await getUserByStripeCustomerId(customerId);
+      if (user) {
+        userId = user.id;
+      }
+    }
+  }
+  if (!userId) {
+    console.warn("handleSubscriptionChange: no userId found in metadata or customer lookup for subscription", subscription.id);
+    return;
+  }
 
   const localStatus = mapStripeStatusToLocal(subscription.status);
 
+  const firstItem = subscription.items.data[0];
+  const currentPeriodStart = firstItem?.current_period_start;
+  const currentPeriodEnd = firstItem?.current_period_end;
+
   await updateSubscriptionStatus(userId, {
     stripeSubscriptionId: subscription.id,
-    stripePriceId: subscription.items.data[0]?.price.id,
+    stripePriceId: firstItem?.price.id,
     subscriptionStatus: localStatus,
-    currentPeriodStart: new Date((subscription as unknown as Record<string, number>).current_period_start * 1000),
-    currentPeriodEnd: new Date((subscription as unknown as Record<string, number>).current_period_end * 1000),
+    ...(currentPeriodStart != null ? { currentPeriodStart: new Date(currentPeriodStart * 1000) } : {}),
+    ...(currentPeriodEnd != null ? { currentPeriodEnd: new Date(currentPeriodEnd * 1000) } : {}),
   });
 }
 
