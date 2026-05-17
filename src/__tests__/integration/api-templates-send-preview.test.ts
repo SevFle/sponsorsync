@@ -76,18 +76,23 @@ beforeEach(() => {
     subject: "Test Subject",
   });
   mockCheckRateLimit.mockReturnValue({ allowed: true, remaining: 49 });
-  mockResolveVariables.mockResolvedValue({
-    variables: {
-      creator_name: "John",
-      creator_show: "My Show",
-      sponsor_name: "Acme",
-      sponsor_company: "Acme Inc",
-      deal_title: "Big Deal",
-      deal_amount: "$500",
-      deliverable_title: "Ad Read",
-      due_date: "2025-03-15",
-    },
-    missing: [],
+  mockResolveVariables.mockImplementation((ctx: { sponsorId?: string; dealId?: string }) => {
+    if (ctx.sponsorId || ctx.dealId) {
+      return Promise.resolve({
+        variables: {
+          creator_name: "John",
+          creator_show: "My Show",
+          sponsor_name: "Acme",
+          sponsor_company: "Acme Inc",
+          deal_title: "Big Deal",
+          deal_amount: "$500",
+          deliverable_title: "Ad Read",
+          due_date: "2025-03-15",
+        },
+        missing: [],
+      });
+    }
+    return Promise.resolve({ variables: {}, missing: [] });
   });
 });
 
@@ -166,8 +171,8 @@ describe("POST /api/templates/[id]/send", () => {
         method: "POST",
         body: JSON.stringify({
           to: "sponsor@test.com",
-          sponsorId: "s-1",
-          dealId: "d-1",
+          sponsorId: "00000000-0000-0000-0000-000000000001",
+          dealId: "00000000-0000-0000-0000-000000000002",
         }),
         headers: { "Content-Type": "application/json" },
       }),
@@ -178,8 +183,8 @@ describe("POST /api/templates/[id]/send", () => {
     expect(mockResolveVariables).toHaveBeenCalledWith(
       expect.objectContaining({
         userId: "user-1",
-        sponsorId: "s-1",
-        dealId: "d-1",
+        sponsorId: "00000000-0000-0000-0000-000000000001",
+        dealId: "00000000-0000-0000-0000-000000000002",
       })
     );
   });
@@ -197,7 +202,7 @@ describe("POST /api/templates/[id]/send", () => {
         method: "POST",
         body: JSON.stringify({
           to: "sponsor@test.com",
-          sponsorId: "s-1",
+          sponsorId: "00000000-0000-0000-0000-000000000001",
           variables: { sponsor_name: "Custom Override" },
         }),
         headers: { "Content-Type": "application/json" },
@@ -225,7 +230,7 @@ describe("POST /api/templates/[id]/send", () => {
 
     expect(response.status).toBe(422);
     const body = await response.json();
-    expect(body.error).toContain("Recipient");
+    expect(body.error).toBe("Validation failed");
   });
 
   it("returns 422 when missing required template variables", async () => {
