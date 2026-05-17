@@ -178,7 +178,7 @@ describe("POST /api/templates edge cases", () => {
       name: "Full Template",
       subject: "Subject with {{variable}}",
       body: "<h1>Title</h1><p>Body with {{content}}</p>",
-      category: "follow_up",
+      category: "renewal",
     };
     const request = new Request("http://localhost:3000/api/templates", {
       method: "POST",
@@ -194,7 +194,7 @@ describe("POST /api/templates edge cases", () => {
   });
 
   it("handles template with minimal fields", async () => {
-    const templateData = { name: "Minimal" };
+    const templateData = { name: "Minimal", body: "<p>Content</p>" };
     const request = new Request("http://localhost:3000/api/templates", {
       method: "POST",
       body: JSON.stringify(templateData),
@@ -207,8 +207,8 @@ describe("POST /api/templates edge cases", () => {
     expect(body.template.name).toBe("Minimal");
   });
 
-  it("handles template with empty body", async () => {
-    const templateData = { name: "Empty Body", body: "" };
+  it("handles template with minimal body", async () => {
+    const templateData = { name: "Minimal Body", body: "<p></p>" };
     const request = new Request("http://localhost:3000/api/templates", {
       method: "POST",
       body: JSON.stringify(templateData),

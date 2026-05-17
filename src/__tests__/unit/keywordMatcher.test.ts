@@ -118,7 +118,7 @@ describe("matchKeywords", () => {
       "Not sponsored by Acme. Not affiliated with Acme. No sponsorship. Not a sponsor.",
       ["Acme"]
     );
-    expect(result.confidence).toBeGreaterThanOrEqual(0);
+    expect(result.confidence).toBe(0);
     expect(result.confidence).toBeLessThanOrEqual(1);
   });
 

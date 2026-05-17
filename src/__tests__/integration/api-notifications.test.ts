@@ -81,18 +81,44 @@ describe("GET /api/notifications", () => {
   });
 
   it("returns JSON content type", async () => {
-    mocks.getNotifications.mockResolvedValue([]);
-    mocks.getUnreadCount.mockResolvedValue(0);
+    const notifications = [
+      {
+        id: "notif-2",
+        userId: "user-1",
+        type: "payment_follow_up",
+        title: "Payment Due",
+        message: "Invoice due in 5 days",
+        relatedId: "deal-2",
+        read: false,
+        createdAt: new Date().toISOString(),
+      },
+    ];
+    mocks.getNotifications.mockResolvedValue(notifications);
+    mocks.getUnreadCount.mockResolvedValue(1);
 
     const response = await GET();
+    expect(response.status).toBe(200);
     expect(response.headers.get("content-type")).toContain("application/json");
   });
 
   it("calls queries with session user id", async () => {
-    mocks.getNotifications.mockResolvedValue([]);
+    const notifications = [
+      {
+        id: "notif-3",
+        userId: "user-1",
+        type: "overdue_deliverable",
+        title: "Overdue",
+        message: "Deliverable past due",
+        relatedId: "deal-3",
+        read: true,
+        createdAt: new Date().toISOString(),
+      },
+    ];
+    mocks.getNotifications.mockResolvedValue(notifications);
     mocks.getUnreadCount.mockResolvedValue(0);
 
-    await GET();
+    const response = await GET();
+    expect(response.status).toBe(200);
     expect(mocks.getNotifications).toHaveBeenCalledWith("user-1");
     expect(mocks.getUnreadCount).toHaveBeenCalledWith("user-1");
   });
@@ -109,7 +135,7 @@ describe("PUT /api/notifications", () => {
     mockAuth(null);
     const request = new Request("http://localhost:3000/api/notifications", {
       method: "PUT",
-      body: JSON.stringify({ notificationId: "notif-1" }),
+      body: JSON.stringify({ notificationId: "absent-notif-401" }),
       headers: { "Content-Type": "application/json" },
     });
     const response = await PUT(request);

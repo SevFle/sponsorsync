@@ -287,8 +287,8 @@ describe("computeEnhancedVerification", () => {
       "user-1"
     );
 
-    expect(result.auditEntry.keywordMatchCount).toBeGreaterThanOrEqual(0);
-    expect(result.auditEntry.keywordTotalCount).toBeGreaterThanOrEqual(0);
+    expect(result.auditEntry.keywordMatchCount).toBe(2);
+    expect(result.auditEntry.keywordTotalCount).toBe(2);
   });
 
   it("handles episode with no transcript", () => {
