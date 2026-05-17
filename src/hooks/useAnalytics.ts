@@ -11,18 +11,25 @@ interface AnalyticsData {
   trends: TrendSummary | null;
 }
 
+interface AnalyticsResponse {
+  revenue: RevenueSummary;
+  pipeline: PipelineSummary;
+  deliverables: DeliverableMetricsResult;
+  trends: TrendSummary;
+}
+
 interface AnalyticsState extends AnalyticsData {
   isLoading: boolean;
   error: string | null;
 }
 
-export function useAnalytics(range: DateRangePreset) {
+export function useAnalytics(range: DateRangePreset, enabled = true) {
   const [state, setState] = useState<AnalyticsState>({
     revenue: null,
     pipeline: null,
     deliverables: null,
     trends: null,
-    isLoading: true,
+    isLoading: enabled,
     error: null,
   });
 
@@ -30,14 +37,18 @@ export function useAnalytics(range: DateRangePreset) {
     setState((prev) => ({ ...prev, isLoading: true, error: null }));
 
     try {
-      const [revenue, pipeline, deliverables, trends] = await Promise.all([
-        apiFetch<RevenueSummary>(`/api/analytics/revenue?range=${range}`),
-        apiFetch<PipelineSummary>("/api/analytics/pipeline"),
-        apiFetch<DeliverableMetricsResult>(`/api/analytics/deliverables?range=${range}`),
-        apiFetch<TrendSummary>("/api/analytics/trends"),
-      ]);
+      const data = await apiFetch<AnalyticsResponse>(
+        `/api/analytics?range=${range}`
+      );
 
-      setState({ revenue, pipeline, deliverables, trends, isLoading: false, error: null });
+      setState({
+        revenue: data.revenue,
+        pipeline: data.pipeline,
+        deliverables: data.deliverables,
+        trends: data.trends,
+        isLoading: false,
+        error: null,
+      });
     } catch (err) {
       setState((prev) => ({
         ...prev,
@@ -48,8 +59,9 @@ export function useAnalytics(range: DateRangePreset) {
   }, [range]);
 
   useEffect(() => {
+    if (!enabled) return;
     fetchData();
-  }, [fetchData]);
+  }, [fetchData, enabled]);
 
   return { ...state, refetch: fetchData };
 }

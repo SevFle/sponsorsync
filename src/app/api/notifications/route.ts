@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth/config";
+import { getAuthenticatedSession } from "@/lib/auth/guard";
 import {
   getNotificationsByUserId,
   getUnreadNotificationCount,
@@ -9,12 +8,12 @@ import {
 } from "@/lib/db/queries/notifications";
 
 export async function GET() {
-  const session = await getServerSession(authOptions);
-  if (!session?.user?.id) {
+  const session = await getAuthenticatedSession();
+  if (!session) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const userId = session.user.id as string;
+  const userId = session.user.id;
   const [notifications, unreadCount] = await Promise.all([
     getNotificationsByUserId(userId),
     getUnreadNotificationCount(userId),
@@ -24,12 +23,12 @@ export async function GET() {
 }
 
 export async function PUT(request: Request) {
-  const session = await getServerSession(authOptions);
-  if (!session?.user?.id) {
+  const session = await getAuthenticatedSession();
+  if (!session) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const userId = session.user.id as string;
+  const userId = session.user.id;
   const body = await request.json();
 
   if (body.markAllRead) {

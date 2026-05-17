@@ -146,4 +146,71 @@ describe("resolveVariables", () => {
     expect(result.variables.deliverable_title).toBe("Ad Read");
     expect(result.missing).toEqual([]);
   });
+
+  it("resolves payment info when paymentId provided", async () => {
+    mockDb.limit.mockResolvedValueOnce([{ id: "u1", name: "John" }]);
+    mockDb.limit.mockResolvedValueOnce([{
+      id: "p1", amount: 25000, dueDate: "2024-06-15",
+    }]);
+
+    const result = await resolveVariables({ userId: "u1", paymentId: "p1" });
+    expect(result.variables.invoice_amount).toBe("$250");
+    expect(result.variables.invoice_number).toMatch(/^INV-/);
+    expect(result.variables.payment_due_date).toBe("2024-06-15");
+  });
+
+  it("handles null payment amount", async () => {
+    mockDb.limit.mockResolvedValueOnce([{ id: "u1", name: "John" }]);
+    mockDb.limit.mockResolvedValueOnce([{
+      id: "p1", amount: null, dueDate: null,
+    }]);
+
+    const result = await resolveVariables({ userId: "u1", paymentId: "p1" });
+    expect(result.variables.invoice_amount).toBe("");
+    expect(result.variables.payment_due_date).toBe("");
+  });
+
+  it("reports missing when payment not found", async () => {
+    mockDb.limit.mockResolvedValueOnce([{ id: "u1", name: "John" }]);
+    mockDb.limit.mockResolvedValueOnce([]);
+
+    const result = await resolveVariables({ userId: "u1", paymentId: "missing" });
+    expect(result.missing).toContain("invoice_amount");
+    expect(result.missing).toContain("invoice_number");
+    expect(result.missing).toContain("payment_due_date");
+  });
+
+  it("resolves full context including payment", async () => {
+    mockDb.limit.mockResolvedValueOnce([{ id: "u1", name: "Jane" }]);
+    mockDb.limit.mockResolvedValueOnce([{
+      id: "s1", name: "Beta", company: "Beta LLC", email: "b@b.com",
+    }]);
+    mockDb.limit.mockResolvedValueOnce([{
+      id: "d1", title: "Big Deal", totalValue: 100000, startDate: "2024-01-01", endDate: "2024-12-31",
+    }]);
+    mockDb.limit.mockResolvedValueOnce([{
+      id: "del1", title: "Ad", description: "Pre-roll", dueDate: "2024-03-01",
+    }]);
+    mockDb.limit.mockResolvedValueOnce([{
+      id: "p1", amount: 50000, dueDate: "2024-04-01",
+    }]);
+
+    const result = await resolveVariables({
+      userId: "u1",
+      sponsorId: "s1",
+      dealId: "d1",
+      deliverableId: "del1",
+      paymentId: "p1",
+    });
+
+    expect(result.variables.creator_name).toBe("Jane");
+    expect(result.variables.sponsor_name).toBe("Beta");
+    expect(result.variables.deal_title).toBe("Big Deal");
+    expect(result.variables.deal_amount).toBe("$1000");
+    expect(result.variables.deliverable_title).toBe("Ad");
+    expect(result.variables.invoice_amount).toBe("$500");
+    expect(result.variables.invoice_number).toMatch(/^INV-/);
+    expect(result.variables.payment_due_date).toBe("2024-04-01");
+    expect(result.missing).toEqual([]);
+  });
 });

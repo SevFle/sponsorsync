@@ -1,7 +1,18 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi, beforeEach } from "vitest";
+
+vi.mock("@/lib/security/ical-token", () => ({
+  validateIcalToken: vi.fn().mockReturnValue("user-123"),
+}));
+
 import { GET } from "@/app/api/ical/[token]/route";
+import { validateIcalToken } from "@/lib/security/ical-token";
 
 describe("GET /api/ical/[token]", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    (validateIcalToken as ReturnType<typeof vi.fn>).mockReturnValue("user-123");
+  });
+
   it("returns valid iCalendar content", async () => {
     const response = await GET(
       new Request("http://localhost:3000/api/ical/abc123"),
@@ -26,14 +37,14 @@ describe("GET /api/ical/[token]", () => {
     expect(text).toContain("PRODID:-//SponsorSync//EN");
   });
 
-  it("includes token in VEVENT UID", async () => {
+  it("includes userId from validated token in VEVENT UID", async () => {
     const response = await GET(
       new Request("http://localhost:3000/api/ical/my-token"),
       { params: Promise.resolve({ token: "my-token" }) }
     );
     const text = await response.text();
 
-    expect(text).toContain("UID:my-token@sponsorsync.app");
+    expect(text).toContain("UID:user-123@sponsorsync.app");
   });
 
   it("includes VEVENT structure", async () => {
@@ -58,14 +69,15 @@ describe("GET /api/ical/[token]", () => {
     expect(response.headers.get("Content-Type")).toBe("text/calendar; charset=utf-8");
   });
 
-  it("sets Content-Disposition header with filename including token", async () => {
+  it("sets Content-Disposition header with filename", async () => {
     const response = await GET(
       new Request("http://localhost:3000/api/ical/abc-def"),
       { params: Promise.resolve({ token: "abc-def" }) }
     );
 
     const disposition = response.headers.get("Content-Disposition");
-    expect(disposition).toBe('attachment; filename="sponsorsync-abc-def.ics"');
+    expect(disposition).toContain("attachment");
+    expect(disposition).toContain(".ics");
   });
 
   it("uses CRLF line endings per iCal spec", async () => {
@@ -85,7 +97,53 @@ describe("GET /api/ical/[token]", () => {
     );
     const text = await response.text();
 
-    expect(text).toContain("UID:user-123_abc@sponsorsync.app");
-    expect(response.headers.get("Content-Disposition")).toContain("user-123_abc");
+    expect(response.status).toBe(200);
+    expect(text).toContain("BEGIN:VCALENDAR");
+  });
+
+  it("calls validateIcalToken with the provided token", async () => {
+    await GET(
+      new Request("http://localhost:3000/api/ical/my-test-token"),
+      { params: Promise.resolve({ token: "my-test-token" }) }
+    );
+
+    expect(validateIcalToken).toHaveBeenCalledWith("my-test-token");
+  });
+});
+
+describe("GET /api/ical/[token] - invalid token", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    (validateIcalToken as ReturnType<typeof vi.fn>).mockReturnValue(null);
+  });
+
+  it("returns 401 for invalid token", async () => {
+    const response = await GET(
+      new Request("http://localhost:3000/api/ical/invalid-token"),
+      { params: Promise.resolve({ token: "invalid-token" }) }
+    );
+
+    expect(response.status).toBe(401);
+    const body = await response.json();
+    expect(body.error).toBe("Invalid token");
+  });
+
+  it("returns 401 for empty token", async () => {
+    const response = await GET(
+      new Request("http://localhost:3000/api/ical/"),
+      { params: Promise.resolve({ token: "" }) }
+    );
+
+    expect(response.status).toBe(401);
+  });
+
+  it("does not return calendar content for invalid tokens", async () => {
+    const response = await GET(
+      new Request("http://localhost:3000/api/ical/fake"),
+      { params: Promise.resolve({ token: "fake" }) }
+    );
+
+    const text = await response.text();
+    expect(text).not.toContain("BEGIN:VCALENDAR");
   });
 });

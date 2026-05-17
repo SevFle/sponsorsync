@@ -1,11 +1,12 @@
 import { db } from "@/lib/db";
-import { sponsors, deals, deliverables, users } from "@/lib/db/schema";
+import { sponsors, deals, deliverables, users, payments } from "@/lib/db/schema";
 import { eq, and } from "drizzle-orm";
 
 export interface VariableContext {
   sponsorId?: string;
   dealId?: string;
   deliverableId?: string;
+  paymentId?: string;
   userId: string;
 }
 
@@ -71,6 +72,21 @@ export async function resolveVariables(
       variables.due_date = deliverable.dueDate ?? "";
     } else {
       missing.push("deliverable_title");
+    }
+  }
+
+  if (context.paymentId) {
+    const [payment] = await db
+      .select()
+      .from(payments)
+      .where(eq(payments.id, context.paymentId))
+      .limit(1);
+    if (payment) {
+      variables.invoice_amount = payment.amount != null ? `$${payment.amount / 100}` : "";
+      variables.invoice_number = `INV-${payment.id.slice(0, 8).toUpperCase()}`;
+      variables.payment_due_date = payment.dueDate ?? "";
+    } else {
+      missing.push("invoice_amount", "invoice_number", "payment_due_date");
     }
   }
 

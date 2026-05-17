@@ -21,10 +21,15 @@ vi.mock("@/lib/db/queries/payments", () => ({
   getPaymentsByUserId: vi.fn(),
 }));
 
+vi.mock("@/lib/db/queries/sponsors", () => ({
+  getSponsorsByUserId: vi.fn(),
+}));
+
 import { getServerSession } from "next-auth";
 import { getDealsByUserId } from "@/lib/db/queries/deals";
 import { getDeliverablesByUserId } from "@/lib/db/queries/deliverables";
 import { getPaymentsByUserId } from "@/lib/db/queries/payments";
+import { getSponsorsByUserId } from "@/lib/db/queries/sponsors";
 
 const mockSession = { user: { id: "user-1", email: "test@test.com", name: "Test User" } };
 
@@ -35,6 +40,7 @@ function mockAuth(session: typeof mockSession | null) {
 beforeEach(() => {
   vi.clearAllMocks();
   mockAuth(mockSession);
+  (getSponsorsByUserId as ReturnType<typeof vi.fn>).mockResolvedValue([]);
 });
 
 describe("GET /api/dashboard - auth guards", () => {
@@ -299,27 +305,28 @@ describe("GET /api/dashboard - edge cases", () => {
     expect(body.metrics.revenueMtd).toBe(1999999998);
   });
 
-  it("returns all raw data alongside metrics", async () => {
+  it("returns enriched data alongside metrics", async () => {
     const rawDeals = [
-      { id: "d1", status: "active", sponsorName: "Test" },
+      { id: "d1", sponsorId: "s1", status: "active", title: "Test Deal", totalValue: 1000, currency: "USD", endDate: null },
     ];
     const rawDeliverables = [
-      { id: "del1", status: "pending", title: "Test Deliverable" },
+      { id: "del1", dealId: "d1", status: "pending", title: "Test Deliverable", dueDate: null },
     ];
     const rawPayments = [
-      { id: "p1", status: "paid", amount: 1000, paidDate: "2025-01-15" },
+      { id: "p1", dealId: "d1", status: "paid", amount: 1000, currency: "USD", paidDate: "2025-01-15", dueDate: null, createdAt: "2025-01-15" },
     ];
 
     (getDealsByUserId as ReturnType<typeof vi.fn>).mockResolvedValue(rawDeals);
     (getDeliverablesByUserId as ReturnType<typeof vi.fn>).mockResolvedValue(rawDeliverables);
     (getPaymentsByUserId as ReturnType<typeof vi.fn>).mockResolvedValue(rawPayments);
+    (getSponsorsByUserId as ReturnType<typeof vi.fn>).mockResolvedValue([{ id: "s1", name: "Test" }]);
 
     const response = await GET();
     const body = await response.json();
 
-    expect(body.deals).toEqual(rawDeals);
-    expect(body.deliverables).toEqual(rawDeliverables);
-    expect(body.payments).toEqual(rawPayments);
+    expect(body.deals).toEqual([{ id: "d1", sponsorName: "Test", title: "Test Deal", status: "active", totalValue: 1000, currency: "USD", endDate: null }]);
+    expect(body.deliverables).toEqual([{ id: "del1", title: "Test Deliverable", dueDate: null, status: "pending", dealTitle: "Test Deal", sponsorName: "Test" }]);
+    expect(body.payments).toEqual([{ id: "p1", amount: 1000, currency: "USD", status: "paid", dueDate: null, paidDate: "2025-01-15", createdAt: "2025-01-15", dealTitle: "Test Deal", sponsorName: "Test" }]);
   });
 
   it("handles paid payment without paidDate (not counted in revenue)", async () => {
@@ -336,35 +343,60 @@ describe("GET /api/dashboard - edge cases", () => {
   });
 });
 
-describe("GET /api/dashboard - error propagation", () => {
-  it("propagates database errors from deals query", async () => {
+describe("GET /api/dashboard - error handling", () => {
+  it("returns 500 when deals query fails", async () => {
     (getDealsByUserId as ReturnType<typeof vi.fn>).mockRejectedValue(
       new Error("Database connection failed")
     );
     (getDeliverablesByUserId as ReturnType<typeof vi.fn>).mockResolvedValue([]);
     (getPaymentsByUserId as ReturnType<typeof vi.fn>).mockResolvedValue([]);
 
-    await expect(GET()).rejects.toThrow("Database connection failed");
+    const response = await GET();
+    expect(response.status).toBe(500);
+    const body = await response.json();
+    expect(body.error).toContain("Database connection failed");
   });
 
-  it("propagates database errors from deliverables query", async () => {
+  it("returns 500 when sponsors query fails", async () => {
+    (getSponsorsByUserId as ReturnType<typeof vi.fn>).mockRejectedValue(
+      new Error("Sponsor query error")
+    );
+    (getDealsByUserId as ReturnType<typeof vi.fn>).mockResolvedValue([]);
+    (getDeliverablesByUserId as ReturnType<typeof vi.fn>).mockResolvedValue([]);
+    (getPaymentsByUserId as ReturnType<typeof vi.fn>).mockResolvedValue([]);
+
+    const response = await GET();
+    expect(response.status).toBe(500);
+    const body = await response.json();
+    expect(body.error).toContain("Sponsor query error");
+  });
+
+  it("returns 200 with empty deliverables when deliverables query fails", async () => {
     (getDealsByUserId as ReturnType<typeof vi.fn>).mockResolvedValue([]);
     (getDeliverablesByUserId as ReturnType<typeof vi.fn>).mockRejectedValue(
       new Error("Query timeout")
     );
     (getPaymentsByUserId as ReturnType<typeof vi.fn>).mockResolvedValue([]);
 
-    await expect(GET()).rejects.toThrow("Query timeout");
+    const response = await GET();
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body.deliverables).toEqual([]);
   });
 
-  it("propagates database errors from payments query", async () => {
+  it("returns 200 with empty payments when payments query fails", async () => {
     (getDealsByUserId as ReturnType<typeof vi.fn>).mockResolvedValue([]);
     (getDeliverablesByUserId as ReturnType<typeof vi.fn>).mockResolvedValue([]);
     (getPaymentsByUserId as ReturnType<typeof vi.fn>).mockRejectedValue(
       new Error("Connection refused")
     );
 
-    await expect(GET()).rejects.toThrow("Connection refused");
+    const response = await GET();
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body.payments).toEqual([]);
   });
 });
 
@@ -377,15 +409,12 @@ describe("GET /api/dashboard - session validation edge cases", () => {
     expect(body.error).toBe("Unauthorized");
   });
 
-  it("passes auth check with whitespace id (truthy) and queries database", async () => {
+  it("rejects whitespace-only id as unauthenticated", async () => {
     mockAuth({ user: { id: "  ", email: "test@test.com" } } as any);
-    (getDealsByUserId as ReturnType<typeof vi.fn>).mockResolvedValue([]);
-    (getDeliverablesByUserId as ReturnType<typeof vi.fn>).mockResolvedValue([]);
-    (getPaymentsByUserId as ReturnType<typeof vi.fn>).mockResolvedValue([]);
-
     const response = await GET();
-    expect(response.status).toBe(200);
-    expect(getDealsByUserId).toHaveBeenCalledWith("  ");
+    expect(response.status).toBe(401);
+    const body = await response.json();
+    expect(body.error).toBe("Unauthorized");
   });
 
   it("returns 401 when session user is undefined", async () => {
@@ -400,9 +429,10 @@ describe("GET /api/dashboard - session validation edge cases", () => {
     expect(response.status).toBe(401);
   });
 
-  it("does not query database when session user id is falsy", async () => {
+  it("returns 401 when session user id is non-string", async () => {
     mockAuth({ user: { id: 0 } } as any);
-    await GET();
+    const response = await GET();
+    expect(response.status).toBe(401);
     expect(getDealsByUserId).not.toHaveBeenCalled();
     expect(getDeliverablesByUserId).not.toHaveBeenCalled();
     expect(getPaymentsByUserId).not.toHaveBeenCalled();
@@ -456,11 +486,11 @@ describe("GET /api/dashboard - response structure", () => {
     expect(body.metrics).toHaveProperty("overduePayments");
   });
 
-  it("returns raw deal objects with all their properties", async () => {
+  it("returns enriched deal objects with all their properties", async () => {
     const rawDeal = {
       id: "d1",
+      sponsorId: "s1",
       status: "active",
-      sponsorName: "Test Sponsor",
       title: "Test Deal",
       totalValue: 5000,
       currency: "USD",
@@ -469,14 +499,24 @@ describe("GET /api/dashboard - response structure", () => {
     (getDealsByUserId as ReturnType<typeof vi.fn>).mockResolvedValue([rawDeal]);
     (getDeliverablesByUserId as ReturnType<typeof vi.fn>).mockResolvedValue([]);
     (getPaymentsByUserId as ReturnType<typeof vi.fn>).mockResolvedValue([]);
+    (getSponsorsByUserId as ReturnType<typeof vi.fn>).mockResolvedValue([{ id: "s1", name: "Test Sponsor" }]);
 
     const response = await GET();
     const body = await response.json();
 
-    expect(body.deals[0]).toEqual(rawDeal);
+    expect(body.deals[0]).toEqual({
+      id: "d1",
+      sponsorName: "Test Sponsor",
+      title: "Test Deal",
+      status: "active",
+      totalValue: 5000,
+      currency: "USD",
+      endDate: "2025-12-31",
+    });
   });
 
-  it("returns raw deliverable objects with all their properties", async () => {
+  it("returns enriched deliverable objects with all their properties", async () => {
+    const rawDeal = { id: "d1", sponsorId: "s1", status: "active", title: "Test Deal", totalValue: 0, currency: "USD", endDate: null };
     const rawDeliverable = {
       id: "dl1",
       title: "Test Deliverable",
@@ -484,17 +524,25 @@ describe("GET /api/dashboard - response structure", () => {
       status: "pending",
       dealId: "d1",
     };
-    (getDealsByUserId as ReturnType<typeof vi.fn>).mockResolvedValue([]);
+    (getDealsByUserId as ReturnType<typeof vi.fn>).mockResolvedValue([rawDeal]);
     (getDeliverablesByUserId as ReturnType<typeof vi.fn>).mockResolvedValue([rawDeliverable]);
     (getPaymentsByUserId as ReturnType<typeof vi.fn>).mockResolvedValue([]);
+    (getSponsorsByUserId as ReturnType<typeof vi.fn>).mockResolvedValue([{ id: "s1", name: "Test Sponsor" }]);
 
     const response = await GET();
     const body = await response.json();
 
-    expect(body.deliverables[0]).toEqual(rawDeliverable);
+    expect(body.deliverables[0]).toEqual({
+      id: "dl1",
+      title: "Test Deliverable",
+      dueDate: "2025-06-30",
+      status: "pending",
+      dealTitle: "Test Deal",
+      sponsorName: "Test Sponsor",
+    });
   });
 
-  it("returns raw payment objects with all their properties", async () => {
+  it("returns enriched payment objects with all their properties", async () => {
     const rawPayment = {
       id: "p1",
       amount: 2500,
@@ -510,6 +558,9 @@ describe("GET /api/dashboard - response structure", () => {
     const response = await GET();
     const body = await response.json();
 
-    expect(body.payments[0]).toEqual(rawPayment);
+    expect(body.payments[0]).toEqual({
+      ...rawPayment,
+      createdAt: "",
+    });
   });
 });

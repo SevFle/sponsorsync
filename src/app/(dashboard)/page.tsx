@@ -6,9 +6,9 @@ import { MetricCard } from "@/components/dashboard/metric-card";
 import { DeadlineRow } from "@/components/dashboard/deadline-row";
 import { ActivityRow } from "@/components/dashboard/activity-row";
 import { formatCurrency } from "@/lib/format";
-import { createServerApiClient } from "@/lib/auth/server-api-client";
-import { computeDashboardMetrics } from "@/lib/dashboard/metrics";
-import type { DashboardDeal, DashboardDeliverable, DashboardPayment } from "@/types/dashboard";
+import { createServerFetch } from "@/lib/auth/server-fetch";
+import { config } from "@/lib/config";
+import type { DashboardData, DashboardDeliverable, DashboardPayment } from "@/types/dashboard";
 
 function getUpcomingDeliverables(deliverables: DashboardDeliverable[]) {
   return deliverables
@@ -31,20 +31,22 @@ function getRecentActivity(payments: DashboardPayment[]) {
 }
 
 export default async function DashboardPage() {
-  await requireAuth();
+  const session = await requireAuth();
 
-  const client = createServerApiClient();
+  let data: DashboardData;
+  try {
+    const serverFetch = createServerFetch({ baseUrl: config.app.url });
+    data = await serverFetch.get<DashboardData>("/api/dashboard");
+  } catch (err) {
+    throw new Error(
+      err instanceof Error ? err.message : "Failed to load dashboard data"
+    );
+  }
 
-  const [dealsRes, deliverablesRes, paymentsRes] = await Promise.all([
-    client.get<{ deals: DashboardDeal[] }>("/api/deals"),
-    client.get<{ deliverables: DashboardDeliverable[] }>("/api/deliverables"),
-    client.get<{ payments: DashboardPayment[] }>("/api/payments"),
-  ]);
-
-  const deals = dealsRes.deals;
-  const deliverables = deliverablesRes.deliverables;
-  const payments = paymentsRes.payments;
-  const metrics = computeDashboardMetrics(deals, deliverables, payments);
+  const deals = data.deals;
+  const deliverables = data.deliverables;
+  const payments = data.payments;
+  const metrics = data.metrics;
 
   const upcomingDeliverables = getUpcomingDeliverables(deliverables as DashboardDeliverable[]);
   const recentActivity = getRecentActivity(payments);

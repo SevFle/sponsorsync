@@ -114,7 +114,7 @@ describe("DealsPage - useSession auth guard", () => {
     render(<DealsPage />);
 
     await waitFor(() => {
-      expect(mockRouter.replace).toHaveBeenCalledWith("/login");
+      expect(mockRouter.replace).toHaveBeenCalledWith(expect.stringContaining("/login?callbackUrl="));
     });
   });
 
@@ -157,7 +157,7 @@ describe("DealsPage - useSession auth guard", () => {
     const { container } = render(<DealsPage />);
 
     await waitFor(() => {
-      expect(mockRouter.replace).toHaveBeenCalledWith("/login");
+      expect(mockRouter.replace).toHaveBeenCalledWith(expect.stringContaining("/login?callbackUrl="));
     });
 
     expect(container.innerHTML).toBe("");

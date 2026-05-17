@@ -1,14 +1,18 @@
-import { createHash, randomBytes } from "crypto";
-
 export const CSRF_COOKIE_NAME = "csrfToken";
 export const CSRF_HEADER_NAME = "X-CSRF-Token";
 
 export function generateCsrfToken(): string {
-  return randomBytes(32).toString("hex");
+  const bytes = new Uint8Array(32);
+  globalThis.crypto.getRandomValues(bytes);
+  return Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("");
 }
 
-export function hashToken(token: string): string {
-  return createHash("sha256").update(token).digest("hex");
+export async function hashToken(token: string): Promise<string> {
+  const data = new TextEncoder().encode(token);
+  const hashBuffer = await globalThis.crypto.subtle.digest("SHA-256", data);
+  return Array.from(new Uint8Array(hashBuffer), (b) =>
+    b.toString(16).padStart(2, "0")
+  ).join("");
 }
 
 export function validateCsrfToken(
@@ -16,7 +20,12 @@ export function validateCsrfToken(
   headerToken: string | undefined
 ): boolean {
   if (!cookieToken || !headerToken) return false;
-  return cookieToken === headerToken;
+  if (cookieToken.length !== headerToken.length) return false;
+  let result = 0;
+  for (let i = 0; i < cookieToken.length; i++) {
+    result |= cookieToken.charCodeAt(i) ^ headerToken.charCodeAt(i);
+  }
+  return result === 0;
 }
 
 const MUTATING_METHODS = new Set(["POST", "PUT", "DELETE", "PATCH"]);

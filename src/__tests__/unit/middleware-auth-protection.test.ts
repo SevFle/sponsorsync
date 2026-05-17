@@ -1,5 +1,18 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
+
+vi.mock("next-auth/jwt", () => ({
+  getToken: vi.fn(async ({ req }: { req: any }) => {
+    const sessionToken =
+      req.cookies.get("next-auth.session-token")?.value ??
+      req.cookies.get("__Secure-next-auth.session-token")?.value;
+    if (!sessionToken) return null;
+    return { id: "user-1" };
+  }),
+}));
+
 import { middleware } from "@/middleware";
+
+const SAFE_PATH_RE = /^\/[a-zA-Z0-9_][a-zA-Z0-9\-._~\/?=%&+ :@]*$|^\/$/;
 
 function createMockRequest(
   pathname: string,
@@ -44,322 +57,251 @@ function createMockRequest(
   } as any;
 }
 
-describe("middleware - public routes", () => {
-  it("allows /login without session token", () => {
+function extractCallbackUrl(location: string): string | null {
+  return new URL(location).searchParams.get("callbackUrl");
+}
+
+describe("middleware - public routes access", () => {
+  it("allows /login without session", async () => {
     const req = createMockRequest("/login");
-    const response = middleware(req);
+    const response = await middleware(req);
     expect(response.status).toBe(200);
   });
 
-  it("allows /api/auth/signin without session token", () => {
+  it("allows /api/auth/signin without session", async () => {
     const req = createMockRequest("/api/auth/signin");
-    const response = middleware(req);
+    const response = await middleware(req);
     expect(response.status).toBe(200);
   });
 
-  it("allows /api/auth/callback/google without session token", () => {
+  it("allows /api/auth/callback/google without session", async () => {
     const req = createMockRequest("/api/auth/callback/google");
-    const response = middleware(req);
+    const response = await middleware(req);
     expect(response.status).toBe(200);
   });
 
-  it("allows /api/webhooks/stripe without session token", () => {
+  it("allows /api/webhooks/stripe POST without session", async () => {
     const req = createMockRequest("/api/webhooks/stripe", { method: "POST" });
-    const response = middleware(req);
+    const response = await middleware(req);
     expect(response.status).toBe(200);
   });
 
-  it("allows /api/webhooks/inngest without session token", () => {
+  it("allows /api/webhooks/inngest POST without session", async () => {
     const req = createMockRequest("/api/webhooks/inngest", { method: "POST" });
-    const response = middleware(req);
+    const response = await middleware(req);
     expect(response.status).toBe(200);
   });
 
-  it("allows /api/health without session token", () => {
+  it("allows /api/health without session", async () => {
     const req = createMockRequest("/api/health");
-    const response = middleware(req);
+    const response = await middleware(req);
     expect(response.status).toBe(200);
   });
 
-  it("allows arbitrary /api/webhooks sub-paths", () => {
-    const paths = [
-      "/api/webhooks/stripe",
-      "/api/webhooks/inngest",
-      "/api/webhooks/custom",
-      "/api/webhooks/",
-    ];
+  it("allows /api/ical paths", async () => {
+    const req = createMockRequest("/api/ical/some-token");
+    const response = await middleware(req);
+    expect(response.status).toBe(200);
+  });
+
+  it("allows arbitrary /api/webhooks sub-paths", async () => {
+    const paths = ["/api/webhooks/stripe", "/api/webhooks/inngest", "/api/webhooks/custom", "/api/webhooks/"];
     for (const path of paths) {
       const req = createMockRequest(path, { method: "POST" });
-      const response = middleware(req);
+      const response = await middleware(req);
       expect(response.status).toBe(200);
     }
   });
 });
 
-describe("middleware - API routes (handled by route handlers)", () => {
-  it("allows /api/deals GET without session token (route handles auth)", () => {
-    const req = createMockRequest("/api/deals", { method: "GET" });
-    const response = middleware(req);
-    expect(response.status).toBe(200);
-  });
+describe("middleware - API auth required", () => {
+  const protectedPaths = [
+    "/api/deals",
+    "/api/dashboard",
+    "/api/sponsors",
+    "/api/payments",
+    "/api/deliverables",
+    "/api/integrations",
+    "/api/templates",
+  ];
 
-  it("allows /api/dashboard GET without session token (route handles auth)", () => {
-    const req = createMockRequest("/api/dashboard", { method: "GET" });
-    const response = middleware(req);
-    expect(response.status).toBe(200);
-  });
+  for (const path of protectedPaths) {
+    it(`blocks ${path} GET without session`, async () => {
+      const req = createMockRequest(path, { method: "GET" });
+      const response = await middleware(req);
+      expect(response.status).toBe(401);
+      const body = await response.json();
+      expect(body.error).toBe("Unauthorized");
+    });
+  }
 
-  it("allows /api/sponsors GET without session token", () => {
-    const req = createMockRequest("/api/sponsors", { method: "GET" });
-    const response = middleware(req);
-    expect(response.status).toBe(200);
-  });
-
-  it("allows /api/payments GET without session token", () => {
-    const req = createMockRequest("/api/payments", { method: "GET" });
-    const response = middleware(req);
-    expect(response.status).toBe(200);
-  });
-
-  it("allows /api/deliverables GET without session token", () => {
-    const req = createMockRequest("/api/deliverables", { method: "GET" });
-    const response = middleware(req);
-    expect(response.status).toBe(200);
-  });
-
-  it("allows /api/integrations GET without session token", () => {
-    const req = createMockRequest("/api/integrations", { method: "GET" });
-    const response = middleware(req);
-    expect(response.status).toBe(200);
-  });
-
-  it("allows /api/templates GET without session token", () => {
-    const req = createMockRequest("/api/templates", { method: "GET" });
-    const response = middleware(req);
+  it("allows /api/deals GET with session", async () => {
+    const req = createMockRequest("/api/deals", {
+      method: "GET",
+      cookies: { "next-auth.session-token": "valid" },
+    });
+    const response = await middleware(req);
     expect(response.status).toBe(200);
   });
 });
 
-describe("middleware - dashboard route protection", () => {
-  it("redirects /dashboard to /login when no session token", () => {
-    const req = createMockRequest("/dashboard");
-    const response = middleware(req);
-    expect(response.status).toBe(307);
-    const location = response.headers.get("location");
-    expect(location).toContain("/login");
-  });
+describe("middleware - dashboard redirect with safe callbackUrl", () => {
+  const dashboardPaths = [
+    "/dashboard",
+    "/dashboard/deals",
+    "/dashboard/sponsors",
+    "/dashboard/payments",
+    "/dashboard/deliverables",
+    "/dashboard/settings",
+    "/dashboard/templates",
+    "/dashboard/integrations",
+    "/dashboard/deals/new",
+    "/dashboard/deals/123",
+    "/dashboard/settings/billing",
+  ];
 
-  it("redirects /dashboard/deals to /login when no session token", () => {
-    const req = createMockRequest("/dashboard/deals");
-    const response = middleware(req);
-    expect(response.status).toBe(307);
-    const location = response.headers.get("location");
-    expect(location).toContain("/login");
-  });
-
-  it("redirects /dashboard/sponsors to /login when no session token", () => {
-    const req = createMockRequest("/dashboard/sponsors");
-    const response = middleware(req);
-    expect(response.status).toBe(307);
-  });
-
-  it("redirects /dashboard/payments to /login when no session token", () => {
-    const req = createMockRequest("/dashboard/payments");
-    const response = middleware(req);
-    expect(response.status).toBe(307);
-  });
-
-  it("redirects /dashboard/deliverables to /login when no session token", () => {
-    const req = createMockRequest("/dashboard/deliverables");
-    const response = middleware(req);
-    expect(response.status).toBe(307);
-  });
-
-  it("redirects /dashboard/settings to /login when no session token", () => {
-    const req = createMockRequest("/dashboard/settings");
-    const response = middleware(req);
-    expect(response.status).toBe(307);
-  });
-
-  it("redirects /dashboard/templates to /login when no session token", () => {
-    const req = createMockRequest("/dashboard/templates");
-    const response = middleware(req);
-    expect(response.status).toBe(307);
-  });
-
-  it("redirects /dashboard/integrations to /login when no session token", () => {
-    const req = createMockRequest("/dashboard/integrations");
-    const response = middleware(req);
-    expect(response.status).toBe(307);
-  });
-
-  it("redirects /dashboard/deals/new to /login when no session token", () => {
-    const req = createMockRequest("/dashboard/deals/new");
-    const response = middleware(req);
-    expect(response.status).toBe(307);
-  });
-
-  it("redirects /dashboard/deals/123 to /login when no session token", () => {
-    const req = createMockRequest("/dashboard/deals/123");
-    const response = middleware(req);
-    expect(response.status).toBe(307);
-  });
+  for (const path of dashboardPaths) {
+    it(`redirects ${path} to /login with safe callbackUrl`, async () => {
+      const req = createMockRequest(path);
+      const response = await middleware(req);
+      expect(response.status).toBe(307);
+      const location = response.headers.get("location")!;
+      const callbackUrl = extractCallbackUrl(location);
+      expect(callbackUrl).not.toBeNull();
+      expect(callbackUrl).toMatch(SAFE_PATH_RE);
+      expect(callbackUrl).toBe(path);
+    });
+  }
 });
 
 describe("middleware - session token handling", () => {
-  it("allows /dashboard with next-auth.session-token cookie", () => {
+  it("allows /dashboard with next-auth.session-token", async () => {
     const req = createMockRequest("/dashboard", {
       cookies: { "next-auth.session-token": "valid-token" },
     });
-    const response = middleware(req);
+    const response = await middleware(req);
     expect(response.status).toBe(200);
   });
 
-  it("allows /dashboard with __Secure-next-auth.session-token cookie", () => {
+  it("allows /dashboard with __Secure-next-auth.session-token", async () => {
     const req = createMockRequest("/dashboard", {
       cookies: { "__Secure-next-auth.session-token": "valid-token" },
     });
-    const response = middleware(req);
+    const response = await middleware(req);
     expect(response.status).toBe(200);
   });
 
-  it("prefers next-auth.session-token over __Secure variant", () => {
+  it("works with both session token variants present", async () => {
     const req = createMockRequest("/dashboard", {
       cookies: {
         "next-auth.session-token": "token-a",
         "__Secure-next-auth.session-token": "token-b",
       },
     });
-    const response = middleware(req);
+    const response = await middleware(req);
     expect(response.status).toBe(200);
   });
 
-  it("redirects when session token cookie is empty string", () => {
+  it("redirects when session token is empty string", async () => {
     const req = createMockRequest("/dashboard", {
       cookies: { "next-auth.session-token": "" },
     });
-    const response = middleware(req);
+    const response = await middleware(req);
     expect(response.status).toBe(307);
   });
 
-  it("redirects when unrelated cookies are present but no session token", () => {
+  it("redirects with unrelated cookies but no session token", async () => {
     const req = createMockRequest("/dashboard", {
       cookies: { "csrf-token": "some-csrf", "preferences": "dark" },
     });
-    const response = middleware(req);
+    const response = await middleware(req);
     expect(response.status).toBe(307);
-  });
-});
-
-describe("middleware - callbackUrl in redirect", () => {
-  it("includes original path as callbackUrl in redirect URL", () => {
-    const req = createMockRequest("/dashboard/deals");
-    const response = middleware(req);
-    const location = response.headers.get("location")!;
-    expect(location).toContain("callbackUrl=%2Fdashboard%2Fdeals");
-  });
-
-  it("includes root dashboard path as callbackUrl", () => {
-    const req = createMockRequest("/dashboard");
-    const response = middleware(req);
-    const location = response.headers.get("location")!;
-    expect(location).toContain("callbackUrl=%2Fdashboard");
-  });
-
-  it("includes nested path as callbackUrl", () => {
-    const req = createMockRequest("/dashboard/deals/abc-123/edit");
-    const response = middleware(req);
-    const location = response.headers.get("location")!;
-    expect(location).toContain("callbackUrl=%2Fdashboard%2Fdeals%2Fabc-123%2Fedit");
   });
 });
 
 describe("middleware - redirect loop prevention", () => {
-  it("does not redirect /login even without session token", () => {
+  it("never redirects /login", async () => {
     const req = createMockRequest("/login");
-    const response = middleware(req);
+    const response = await middleware(req);
     expect(response.status).toBe(200);
   });
 
-  it("does not redirect /api/auth routes even without session token", () => {
+  it("never redirects /api/auth routes", async () => {
     const req = createMockRequest("/api/auth/signin");
-    const response = middleware(req);
+    const response = await middleware(req);
     expect(response.status).toBe(200);
   });
 
-  it("does not redirect root path without session token", () => {
+  it("redirects / without session to /login", async () => {
     const req = createMockRequest("/");
-    const response = middleware(req);
+    const response = await middleware(req);
     expect(response.status).toBe(307);
-  });
-});
-
-describe("middleware - root and non-dashboard pages", () => {
-  it("redirects root path to /login when no session token", () => {
-    const req = createMockRequest("/");
-    const response = middleware(req);
-    expect(response.status).toBe(307);
-  });
-
-  it("allows root path with session token", () => {
-    const req = createMockRequest("/", {
-      cookies: { "next-auth.session-token": "valid" },
-    });
-    const response = middleware(req);
-    expect(response.status).toBe(200);
-  });
-
-  it("allows unknown paths with session token", () => {
-    const req = createMockRequest("/some/random/page", {
-      cookies: { "next-auth.session-token": "valid" },
-    });
-    const response = middleware(req);
-    expect(response.status).toBe(200);
+    const location = response.headers.get("location")!;
+    const callbackUrl = extractCallbackUrl(location);
+    expect(callbackUrl).toMatch(SAFE_PATH_RE);
   });
 });
 
 describe("middleware - edge cases", () => {
-  it("handles /dashboard with trailing slash", () => {
+  it("handles /dashboard/ with trailing slash", async () => {
     const req = createMockRequest("/dashboard/");
-    const response = middleware(req);
+    const response = await middleware(req);
     expect(response.status).toBe(307);
+    const location = response.headers.get("location")!;
+    const callbackUrl = extractCallbackUrl(location);
+    expect(callbackUrl).toMatch(SAFE_PATH_RE);
   });
 
-  it("handles deeply nested dashboard paths", () => {
+  it("handles deeply nested dashboard paths", async () => {
     const req = createMockRequest("/dashboard/deals/123/edit");
-    const response = middleware(req);
+    const response = await middleware(req);
     expect(response.status).toBe(307);
+    const location = response.headers.get("location")!;
+    const callbackUrl = extractCallbackUrl(location);
+    expect(callbackUrl).toBe("/dashboard/deals/123/edit");
+    expect(callbackUrl).toMatch(SAFE_PATH_RE);
   });
 
-  it("handles paths with query parameters", () => {
+  it("handles paths with query parameters", async () => {
     const req = createMockRequest("/dashboard/deals", {
       searchParams: { page: "2", status: "active" },
     });
-    const response = middleware(req);
+    const response = await middleware(req);
     expect(response.status).toBe(307);
+    const location = response.headers.get("location")!;
+    const callbackUrl = extractCallbackUrl(location);
+    expect(callbackUrl).toMatch(SAFE_PATH_RE);
   });
 
-  it("allows authenticated user to access nested sponsor edit page", () => {
+  it("allows authenticated user to nested sponsor edit page", async () => {
     const req = createMockRequest("/dashboard/sponsors/abc-123/edit", {
       cookies: { "next-auth.session-token": "valid" },
     });
-    const response = middleware(req);
+    const response = await middleware(req);
     expect(response.status).toBe(200);
   });
 
-  it("allows authenticated user to access sponsor detail page", () => {
+  it("allows authenticated user to sponsor detail page", async () => {
     const req = createMockRequest("/dashboard/sponsors/abc-123", {
       cookies: { "next-auth.session-token": "valid" },
     });
-    const response = middleware(req);
+    const response = await middleware(req);
     expect(response.status).toBe(200);
   });
 
-  it("allows authenticated user to access deal detail page", () => {
+  it("allows authenticated user to deal detail page", async () => {
     const req = createMockRequest("/dashboard/deals/xyz-456", {
       cookies: { "next-auth.session-token": "valid" },
     });
-    const response = middleware(req);
+    const response = await middleware(req);
+    expect(response.status).toBe(200);
+  });
+
+  it("allows unknown paths with session token", async () => {
+    const req = createMockRequest("/some/random/page", {
+      cookies: { "next-auth.session-token": "valid" },
+    });
+    const response = await middleware(req);
     expect(response.status).toBe(200);
   });
 });

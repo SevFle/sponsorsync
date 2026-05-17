@@ -34,7 +34,8 @@ export async function apiFetch<T = unknown>(
   });
 
   if (response.status === 401) {
-    redirectToLogin();
+    const callbackUrl = typeof window !== "undefined" ? window.location.pathname : undefined;
+    redirectToLogin(callbackUrl);
     throw new ApiError(401, "Unauthorized");
   }
 

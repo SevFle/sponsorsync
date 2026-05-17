@@ -1,14 +1,14 @@
 import { NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth/config";
+import { getAuthenticatedSession } from "@/lib/auth/guard";
 import { getTemplateById, updateTemplate, deleteTemplate } from "@/lib/db/queries/templates";
+import { updateTemplateSchema } from "@/domain/templates";
 
 export async function GET(
   _request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const session = await getServerSession(authOptions);
-  if (!session?.user?.id) {
+  const session = await getAuthenticatedSession();
+  if (!session) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
@@ -30,8 +30,8 @@ export async function PATCH(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const session = await getServerSession(authOptions);
-  if (!session?.user?.id) {
+  const session = await getAuthenticatedSession();
+  if (!session) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
@@ -44,22 +44,22 @@ export async function PATCH(
     return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
   }
 
-  if (!body || typeof body !== "object") {
-    return NextResponse.json({ error: "Invalid request body" }, { status: 422 });
+  const parsed = updateTemplateSchema.safeParse(body);
+  if (!parsed.success) {
+    return NextResponse.json(
+      {
+        error: "Validation failed",
+        details: parsed.error.flatten().fieldErrors,
+      },
+      { status: 422 }
+    );
   }
 
-  const data = body as Record<string, unknown>;
-  const updates: Record<string, unknown> = {};
+  const updates = parsed.data;
 
-  if ("name" in data) {
-    if (typeof data.name !== "string" || !data.name.trim()) {
-      return NextResponse.json({ error: "Name must be a non-empty string" }, { status: 422 });
-    }
-    updates.name = (data.name as string).trim();
+  if (Object.keys(updates).length === 0) {
+    return NextResponse.json({ error: "No fields to update" }, { status: 422 });
   }
-  if ("subject" in data) updates.subject = data.subject as string | null;
-  if ("body" in data) updates.body = data.body as string;
-  if ("category" in data) updates.category = data.category as string | null;
 
   try {
     const template = await updateTemplate(id, updates, session.user.id);
@@ -77,8 +77,8 @@ export async function DELETE(
   _request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const session = await getServerSession(authOptions);
-  if (!session?.user?.id) {
+  const session = await getAuthenticatedSession();
+  if (!session) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 

@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth/config";
+import { getAuthenticatedSession } from "@/lib/auth/guard";
 import { z } from "zod";
 import {
   getNotificationPreferences,
@@ -21,12 +20,12 @@ const notificationPreferencesSchema = z.object({
 });
 
 export async function GET() {
-  const session = await getServerSession(authOptions);
-  if (!session?.user?.id) {
+  const session = await getAuthenticatedSession();
+  if (!session) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const preferences = await getNotificationPreferences(session.user.id as string);
+  const preferences = await getNotificationPreferences(session.user.id);
   if (!preferences) {
     return NextResponse.json({ preferences: null });
   }
@@ -35,8 +34,8 @@ export async function GET() {
 }
 
 export async function PUT(request: Request) {
-  const session = await getServerSession(authOptions);
-  if (!session?.user?.id) {
+  const session = await getAuthenticatedSession();
+  if (!session) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
@@ -65,7 +64,7 @@ export async function PUT(request: Request) {
   }
 
   const preferences = await upsertNotificationPreferences(
-    session.user.id as string,
+    session.user.id,
     parsed.data
   );
   return NextResponse.json({ preferences });

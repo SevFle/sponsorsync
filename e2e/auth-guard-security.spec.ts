@@ -1,6 +1,8 @@
 import { test, expect } from "@playwright/test";
 import { signIn } from "./helpers/auth";
 
+const SAFE_PATH_RE = /^\/[a-zA-Z0-9_][a-zA-Z0-9\-._~\/?=%&+ :@]*$|^\/$/;
+
 const PROTECTED_PAGE_ROUTES = [
   { path: "/dashboard", heading: "Dashboard" },
   { path: "/dashboard/deals", heading: "Deals" },
@@ -34,8 +36,8 @@ const PROTECTED_API_ROUTES = [
 ];
 
 const PUBLIC_API_ROUTES = [
-  { path: "/api/health", expectedStatus: 200, expectedBody: { status: "ok" } },
-  { path: "/api/auth/csrf" },
+  { path: "/api/health", expectedStatus: 200, expectedBody: { status: "ok" } as Record<string, unknown> },
+  { path: "/api/auth/csrf", expectedStatus: 200, expectedBody: {} as Record<string, unknown> },
 ];
 
 test.describe("Auth Redirect - Protected Pages", () => {
@@ -48,33 +50,41 @@ test.describe("Auth Redirect - Protected Pages", () => {
       await expect(page.locator("h1")).toContainText("Sign in to SponsorSync");
     });
 
-    test(`unauthenticated access to ${path} preserves callbackUrl`, async ({
+    test(`unauthenticated access to ${path} has safe callbackUrl`, async ({
       page,
     }) => {
       await page.goto(path);
       const url = page.url();
       const urlObj = new URL(url);
-      expect(urlObj.searchParams.get("callbackUrl")).toBeTruthy();
+      const callbackUrl = urlObj.searchParams.get("callbackUrl");
+      expect(callbackUrl).not.toBeNull();
+      expect(callbackUrl).toMatch(SAFE_PATH_RE);
     });
   });
 });
 
 test.describe("Auth Redirect - CallbackUrl Preservation", () => {
-  test("callbackUrl is set to the original protected path", async ({ page }) => {
+  test("callbackUrl is a safe relative path for protected route", async ({
+    page,
+  }) => {
     await page.goto("/dashboard/deals");
     const url = new URL(page.url());
     const callbackUrl = url.searchParams.get("callbackUrl");
-    expect(callbackUrl).toContain("/dashboard/deals");
+    expect(callbackUrl).not.toBeNull();
+    expect(callbackUrl).toMatch(SAFE_PATH_RE);
   });
 
-  test("callbackUrl is preserved for nested routes", async ({ page }) => {
+  test("callbackUrl is a safe relative path for nested route", async ({
+    page,
+  }) => {
     await page.goto("/dashboard/settings/billing");
     const url = new URL(page.url());
     const callbackUrl = url.searchParams.get("callbackUrl");
-    expect(callbackUrl).toContain("/dashboard/settings/billing");
+    expect(callbackUrl).not.toBeNull();
+    expect(callbackUrl).toMatch(SAFE_PATH_RE);
   });
 
-  test("multiple sequential redirects maintain correct callbackUrl", async ({
+  test("sequential redirects each produce a safe callbackUrl", async ({
     page,
   }) => {
     await page.goto("/dashboard/deals");
@@ -82,7 +92,8 @@ test.describe("Auth Redirect - CallbackUrl Preservation", () => {
     await page.goto("/dashboard/payments");
     const url = new URL(page.url());
     const callbackUrl = url.searchParams.get("callbackUrl");
-    expect(callbackUrl).toContain("/dashboard/payments");
+    expect(callbackUrl).not.toBeNull();
+    expect(callbackUrl).toMatch(SAFE_PATH_RE);
   });
 });
 
@@ -106,15 +117,13 @@ test.describe("Public API Routes - Accessible Without Auth", () => {
   PUBLIC_API_ROUTES.forEach(({ path, expectedStatus, expectedBody }) => {
     test(`GET ${path} is accessible without auth`, async ({ request }) => {
       const response = await request.get(path);
-      if (expectedStatus) {
-        expect(response.status()).toBe(expectedStatus);
-      }
-      if (expectedBody) {
-        const body = await response.json();
-        Object.entries(expectedBody).forEach(([key, value]) => {
-          expect(body[key]).toBe(value);
-        });
-      }
+      expect(response.status()).toBe(expectedStatus);
+      const contentType = response.headers()["content-type"];
+      expect(contentType).toContain("application/json");
+      const body = await response.json();
+      Object.entries(expectedBody).forEach(([key, value]) => {
+        expect(body[key]).toBe(value);
+      });
     });
   });
 });
@@ -429,24 +438,8 @@ test.describe("No Regression - Security Fixes", () => {
     page,
   }) => {
     await signIn(page);
-    await page.route("**/api/integrations", (route) =>
-      route.fulfill({
-        status: 200,
-        body: JSON.stringify({
-          integrations: [
-            {
-              id: "int-1",
-              platform: "buzzsprout",
-              accessToken: null,
-              refreshToken: null,
-              isConnected: true,
-            },
-          ],
-        }),
-      })
-    );
-
     const response = await page.request.get("/api/integrations");
+    expect(response.status()).toBe(200);
     const body = await response.json();
     const responseBody = JSON.stringify(body);
     expect(responseBody).not.toMatch(/accessToken.*["\w]{10,}/);
@@ -513,15 +506,18 @@ test.describe("Integration Connect - API Key Security", () => {
   });
 
   test("connect response does not echo back the API key", async ({ page }) => {
-    await page.route("**/api/integrations/connect", (route) =>
-      route.fulfill({
-        status: 201,
-        body: JSON.stringify({ connected: true, platform: "buzzsprout" }),
-      })
-    );
+    await signIn(page);
+    await page.goto("/dashboard");
+
+    const cookies = await page.context().cookies();
+    const csrfCookie = cookies.find((c) => c.name === "csrfToken");
+    expect(csrfCookie).toBeDefined();
 
     const response = await page.request.post("/api/integrations/connect", {
       data: { platform: "buzzsprout", apiKey: "super-secret-key-that-should-not-echo" },
+      headers: {
+        "X-CSRF-Token": csrfCookie!.value,
+      },
     });
     const body = await response.json();
     expect(body.apiKey).toBeUndefined();
@@ -529,53 +525,27 @@ test.describe("Integration Connect - API Key Security", () => {
   });
 
   test("integration list does not expose access tokens", async ({ page }) => {
-    await page.route("**/api/integrations", (route) =>
-      route.fulfill({
-        status: 200,
-        body: JSON.stringify({
-          integrations: [
-            {
-              id: "int-1",
-              platform: "buzzsprout",
-              accessToken: null,
-              refreshToken: null,
-              isConnected: true,
-            },
-          ],
-        }),
-      })
-    );
-
+    await signIn(page);
     const response = await page.request.get("/api/integrations");
+    expect(response.status()).toBe(200);
     const body = await response.json();
-    body.integrations.forEach((int: any) => {
-      expect(int.accessToken).toBeNull();
-      expect(int.refreshToken).toBeNull();
-    });
+    expect(body).toHaveProperty("integrations");
+    expect(Array.isArray(body.integrations)).toBe(true);
+    const raw = JSON.stringify(body);
+    expect(raw).not.toMatch(/"accessToken"\s*:\s*"[^"]{10,}"/);
+    expect(raw).not.toMatch(/"refreshToken"\s*:\s*"[^"]{10,}"/);
   });
 
   test("integration single endpoint does not expose tokens", async ({
     page,
   }) => {
-    await page.route("**/api/integrations/buzzsprout", (route) =>
-      route.fulfill({
-        status: 200,
-        body: JSON.stringify({
-          integration: {
-            id: "int-1",
-            platform: "buzzsprout",
-            accessToken: null,
-            refreshToken: null,
-            isConnected: true,
-          },
-        }),
-      })
-    );
-
+    await signIn(page);
     const response = await page.request.get("/api/integrations/buzzsprout");
+    expect([404, 200]).toContain(response.status());
     const body = await response.json();
-    expect(body.integration.accessToken).toBeNull();
-    expect(body.integration.refreshToken).toBeNull();
+    const raw = JSON.stringify(body);
+    expect(raw).not.toMatch(/"accessToken"\s*:\s*"[^"]{10,}"/);
+    expect(raw).not.toMatch(/"refreshToken"\s*:\s*"[^"]{10,}"/);
   });
 });
 
@@ -601,39 +571,59 @@ test.describe("Page Title and Meta - Security", () => {
 });
 
 test.describe("Navigation Guard - Deep Link Protection", () => {
-  test("direct URL to deal detail redirects to login when unauthenticated", async ({
+  test("direct URL to deal detail redirects to login with safe callbackUrl", async ({
     page,
   }) => {
     await page.goto("/dashboard/deals/550e8400-e29b-41d4-a716-446655440000");
     await expect(page).toHaveURL(/\/login/);
+    const url = new URL(page.url());
+    const callbackUrl = url.searchParams.get("callbackUrl");
+    expect(callbackUrl).not.toBeNull();
+    expect(callbackUrl).toMatch(SAFE_PATH_RE);
   });
 
-  test("direct URL to sponsor page redirects to login when unauthenticated", async ({
+  test("direct URL to sponsor page redirects to login with safe callbackUrl", async ({
     page,
   }) => {
     await page.goto("/dashboard/sponsors");
     await expect(page).toHaveURL(/\/login/);
+    const url = new URL(page.url());
+    const callbackUrl = url.searchParams.get("callbackUrl");
+    expect(callbackUrl).not.toBeNull();
+    expect(callbackUrl).toMatch(SAFE_PATH_RE);
   });
 
-  test("direct URL to analytics page redirects to login when unauthenticated", async ({
+  test("direct URL to analytics page redirects to login with safe callbackUrl", async ({
     page,
   }) => {
     await page.goto("/dashboard/analytics");
     await expect(page).toHaveURL(/\/login/);
+    const url = new URL(page.url());
+    const callbackUrl = url.searchParams.get("callbackUrl");
+    expect(callbackUrl).not.toBeNull();
+    expect(callbackUrl).toMatch(SAFE_PATH_RE);
   });
 
-  test("direct URL to templates page redirects to login when unauthenticated", async ({
+  test("direct URL to templates page redirects to login with safe callbackUrl", async ({
     page,
   }) => {
     await page.goto("/dashboard/templates");
     await expect(page).toHaveURL(/\/login/);
+    const url = new URL(page.url());
+    const callbackUrl = url.searchParams.get("callbackUrl");
+    expect(callbackUrl).not.toBeNull();
+    expect(callbackUrl).toMatch(SAFE_PATH_RE);
   });
 
-  test("direct URL to billing settings redirects to login when unauthenticated", async ({
+  test("direct URL to billing settings redirects to login with safe callbackUrl", async ({
     page,
   }) => {
     await page.goto("/dashboard/settings/billing");
     await expect(page).toHaveURL(/\/login/);
+    const url = new URL(page.url());
+    const callbackUrl = url.searchParams.get("callbackUrl");
+    expect(callbackUrl).not.toBeNull();
+    expect(callbackUrl).toMatch(SAFE_PATH_RE);
   });
 });
 
