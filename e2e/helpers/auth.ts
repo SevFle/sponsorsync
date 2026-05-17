@@ -1,4 +1,4 @@
-import { Page, request, expect } from "@playwright/test";
+import { Page, request } from "@playwright/test";
 
 const TEST_USER_EMAIL = "test@sponsorsync.dev";
 

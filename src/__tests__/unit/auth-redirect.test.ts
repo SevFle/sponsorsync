@@ -33,7 +33,6 @@ describe("redirectToLogin - sanitized redirect target", () => {
         const href = window.location.href;
         expect(href).toMatch(/^\/login\?callbackUrl=/);
         const sanitized = extractCallbackUrl(href);
-        expect(sanitized).not.toBeNull();
         expect(sanitized).toMatch(SAFE_PATH_RE);
         expect(sanitized).toBe(callbackUrl);
       });

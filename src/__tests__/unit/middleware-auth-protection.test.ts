@@ -167,7 +167,6 @@ describe("middleware - dashboard redirect with safe callbackUrl", () => {
       expect(response.status).toBe(307);
       const location = response.headers.get("location")!;
       const callbackUrl = extractCallbackUrl(location);
-      expect(callbackUrl).not.toBeNull();
       expect(callbackUrl).toMatch(SAFE_PATH_RE);
       expect(callbackUrl).toBe(path);
     });
