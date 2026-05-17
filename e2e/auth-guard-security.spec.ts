@@ -57,7 +57,6 @@ test.describe("Auth Redirect - Protected Pages", () => {
       const url = page.url();
       const urlObj = new URL(url);
       const callbackUrl = urlObj.searchParams.get("callbackUrl");
-      expect(callbackUrl).not.toBeNull();
       expect(callbackUrl).toMatch(SAFE_PATH_RE);
     });
   });
@@ -70,7 +69,6 @@ test.describe("Auth Redirect - CallbackUrl Preservation", () => {
     await page.goto("/dashboard/deals");
     const url = new URL(page.url());
     const callbackUrl = url.searchParams.get("callbackUrl");
-    expect(callbackUrl).not.toBeNull();
     expect(callbackUrl).toMatch(SAFE_PATH_RE);
   });
 
@@ -80,7 +78,6 @@ test.describe("Auth Redirect - CallbackUrl Preservation", () => {
     await page.goto("/dashboard/settings/billing");
     const url = new URL(page.url());
     const callbackUrl = url.searchParams.get("callbackUrl");
-    expect(callbackUrl).not.toBeNull();
     expect(callbackUrl).toMatch(SAFE_PATH_RE);
   });
 
@@ -92,7 +89,6 @@ test.describe("Auth Redirect - CallbackUrl Preservation", () => {
     await page.goto("/dashboard/payments");
     const url = new URL(page.url());
     const callbackUrl = url.searchParams.get("callbackUrl");
-    expect(callbackUrl).not.toBeNull();
     expect(callbackUrl).toMatch(SAFE_PATH_RE);
   });
 });
@@ -578,7 +574,6 @@ test.describe("Navigation Guard - Deep Link Protection", () => {
     await expect(page).toHaveURL(/\/login/);
     const url = new URL(page.url());
     const callbackUrl = url.searchParams.get("callbackUrl");
-    expect(callbackUrl).not.toBeNull();
     expect(callbackUrl).toMatch(SAFE_PATH_RE);
   });
 
@@ -589,7 +584,6 @@ test.describe("Navigation Guard - Deep Link Protection", () => {
     await expect(page).toHaveURL(/\/login/);
     const url = new URL(page.url());
     const callbackUrl = url.searchParams.get("callbackUrl");
-    expect(callbackUrl).not.toBeNull();
     expect(callbackUrl).toMatch(SAFE_PATH_RE);
   });
 
@@ -600,7 +594,6 @@ test.describe("Navigation Guard - Deep Link Protection", () => {
     await expect(page).toHaveURL(/\/login/);
     const url = new URL(page.url());
     const callbackUrl = url.searchParams.get("callbackUrl");
-    expect(callbackUrl).not.toBeNull();
     expect(callbackUrl).toMatch(SAFE_PATH_RE);
   });
 
@@ -611,7 +604,6 @@ test.describe("Navigation Guard - Deep Link Protection", () => {
     await expect(page).toHaveURL(/\/login/);
     const url = new URL(page.url());
     const callbackUrl = url.searchParams.get("callbackUrl");
-    expect(callbackUrl).not.toBeNull();
     expect(callbackUrl).toMatch(SAFE_PATH_RE);
   });
 
@@ -622,7 +614,6 @@ test.describe("Navigation Guard - Deep Link Protection", () => {
     await expect(page).toHaveURL(/\/login/);
     const url = new URL(page.url());
     const callbackUrl = url.searchParams.get("callbackUrl");
-    expect(callbackUrl).not.toBeNull();
     expect(callbackUrl).toMatch(SAFE_PATH_RE);
   });
 });

@@ -336,7 +336,6 @@ describe("middleware - page route auth and redirect", () => {
       const response = await middleware(req);
       const location = response.headers.get("location")!;
       const callbackUrl = extractCallbackUrl(location);
-      expect(callbackUrl).not.toBeNull();
       expect(callbackUrl).toMatch(SAFE_PATH_RE);
     }
   });

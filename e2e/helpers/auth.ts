@@ -1,4 +1,4 @@
-import { Page, request } from "@playwright/test";
+import { Page, request, expect } from "@playwright/test";
 
 const TEST_USER_EMAIL = "test@sponsorsync.dev";
 
@@ -16,6 +16,14 @@ export async function signIn(page: Page) {
   });
 
   return response;
+}
+
+export async function getCsrfToken(page: Page): Promise<string> {
+  await page.goto("/dashboard");
+  const cookies = await page.context().cookies();
+  const csrfCookie = cookies.find((c) => c.name === "csrfToken");
+  if (!csrfCookie) throw new Error("CSRF cookie not found after navigating to /dashboard");
+  return csrfCookie.value;
 }
 
 export async function getAuthCookies() {

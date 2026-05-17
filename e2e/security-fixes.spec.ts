@@ -24,6 +24,7 @@ test.describe("Open Redirect Protection", () => {
     await page.goto("/login?callbackUrl=https://evil.com/steal-session");
     await expect(page.locator("h1")).toContainText("Sign in to SponsorSync");
     const callbackUrl = getCallbackUrl(page.url());
+    expect(callbackUrl === null || SAFE_PATH_RE.test(callbackUrl!)).toBe(true);
     expect(callbackUrl).toBeNull();
   });
 
@@ -33,6 +34,7 @@ test.describe("Open Redirect Protection", () => {
     await page.goto("/login?callbackUrl=//evil.com/phish");
     await expect(page.locator("h1")).toContainText("Sign in to SponsorSync");
     const callbackUrl = getCallbackUrl(page.url());
+    expect(callbackUrl === null || SAFE_PATH_RE.test(callbackUrl!)).toBe(true);
     expect(callbackUrl).toBeNull();
   });
 
@@ -42,6 +44,7 @@ test.describe("Open Redirect Protection", () => {
     await page.goto("/login?callbackUrl=javascript:alert(1)");
     await expect(page.locator("h1")).toContainText("Sign in to SponsorSync");
     const callbackUrl = getCallbackUrl(page.url());
+    expect(callbackUrl === null || SAFE_PATH_RE.test(callbackUrl!)).toBe(true);
     expect(callbackUrl).toBeNull();
   });
 
@@ -69,7 +72,6 @@ test.describe("Open Redirect Protection", () => {
       await page.goto(path);
       await expect(page).toHaveURL(/\/login/);
       const callbackUrl = getCallbackUrl(page.url());
-      expect(callbackUrl).not.toBeNull();
       expect(callbackUrl).toMatch(SAFE_PATH_RE);
     }
   });
@@ -78,6 +80,7 @@ test.describe("Open Redirect Protection", () => {
     await page.goto("/login?callbackUrl=data:text/html,<script>alert(1)</script>");
     await expect(page.locator("h1")).toContainText("Sign in to SponsorSync");
     const callbackUrl = getCallbackUrl(page.url());
+    expect(callbackUrl === null || SAFE_PATH_RE.test(callbackUrl!)).toBe(true);
     expect(callbackUrl).toBeNull();
   });
 
@@ -85,6 +88,7 @@ test.describe("Open Redirect Protection", () => {
     await page.goto("/login?callbackUrl=ftp://evil.com/file");
     await expect(page.locator("h1")).toContainText("Sign in to SponsorSync");
     const callbackUrl = getCallbackUrl(page.url());
+    expect(callbackUrl === null || SAFE_PATH_RE.test(callbackUrl!)).toBe(true);
     expect(callbackUrl).toBeNull();
   });
 
@@ -92,6 +96,7 @@ test.describe("Open Redirect Protection", () => {
     await page.goto("/login?callbackUrl=///evil.com");
     await expect(page.locator("h1")).toContainText("Sign in to SponsorSync");
     const callbackUrl = getCallbackUrl(page.url());
+    expect(callbackUrl === null || SAFE_PATH_RE.test(callbackUrl!)).toBe(true);
     expect(callbackUrl).toBeNull();
   });
 
@@ -99,6 +104,7 @@ test.describe("Open Redirect Protection", () => {
     await page.goto("/login?callbackUrl=HTTPS://EVIL.COM");
     await expect(page.locator("h1")).toContainText("Sign in to SponsorSync");
     const callbackUrl = getCallbackUrl(page.url());
+    expect(callbackUrl === null || SAFE_PATH_RE.test(callbackUrl!)).toBe(true);
     expect(callbackUrl).toBeNull();
   });
 });
@@ -301,7 +307,6 @@ test.describe("IDOR Protection - Resource Ownership", () => {
     );
     await expect(page).toHaveURL(/\/login/);
     const callbackUrl = getCallbackUrl(page.url());
-    expect(callbackUrl).not.toBeNull();
     expect(callbackUrl).toMatch(SAFE_PATH_RE);
     expect(callbackUrl).toContain("/dashboard/deals/");
   });
@@ -328,7 +333,6 @@ test.describe("Dashboard Auth Guard - Complete Flow", () => {
       await page.goto(route);
       await expect(page).toHaveURL(/\/login/);
       const callbackUrl = getCallbackUrl(page.url());
-      expect(callbackUrl).not.toBeNull();
       expect(callbackUrl).toMatch(SAFE_PATH_RE);
     }
   });
