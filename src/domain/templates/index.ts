@@ -59,8 +59,10 @@ export const createTemplateSchema = z
       .transform((v) => v ?? null),
     body: z
       .string()
-      .min(1, "Body is required")
-      .refine((v) => htmlBodyRegex.test(v), {
+      .nullable()
+      .optional()
+      .transform((v) => v ?? "")
+      .refine((v) => v === "" || htmlBodyRegex.test(v), {
         message: "Body must contain valid HTML",
       }),
     category: z
