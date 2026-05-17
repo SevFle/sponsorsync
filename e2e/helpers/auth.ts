@@ -19,11 +19,17 @@ export async function signIn(page: Page) {
 }
 
 export async function getCsrfToken(page: Page): Promise<string> {
-  await page.goto("/dashboard");
-  const cookies = await page.context().cookies();
-  const csrfCookie = cookies.find((c) => c.name === "csrfToken");
-  if (!csrfCookie) throw new Error("CSRF cookie not found after navigating to /dashboard");
-  return csrfCookie.value;
+  const res = await page.request.get("/api/auth/csrf");
+  if (!res.ok()) {
+    throw new Error(
+      `Failed to fetch CSRF token: ${res.status()} ${res.statusText()}`
+    );
+  }
+  const data = await res.json();
+  if (!data.csrfToken) {
+    throw new Error("CSRF token not found in /api/auth/csrf response");
+  }
+  return data.csrfToken as string;
 }
 
 export async function getAuthCookies() {
