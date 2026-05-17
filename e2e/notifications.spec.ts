@@ -167,7 +167,7 @@ test.describe("Notifications API - Authenticated", () => {
     const deadlineNotifs = body.notifications.filter(
       (n: any) => n.type === "deadline_reminder"
     );
-    expect(deadlineNotifs.length).toBeGreaterThan(0);
+    expect(deadlineNotifs.length).toBe(2);
     deadlineNotifs.forEach((n: any) => {
       expect(n.title).toBeTruthy();
       expect(n.message).toContain("due");
@@ -190,7 +190,7 @@ test.describe("Notifications API - Authenticated", () => {
     const paymentNotifs = body.notifications.filter(
       (n: any) => n.type === "payment_follow_up"
     );
-    expect(paymentNotifs.length).toBeGreaterThan(0);
+    expect(paymentNotifs.length).toBe(1);
     paymentNotifs.forEach((n: any) => {
       expect(n.title).toContain("Payment");
       expect(n.message).toMatch(/\$/);
@@ -201,14 +201,12 @@ test.describe("Notifications API - Authenticated", () => {
     const csrfToken = await getCsrfToken(page);
 
     const response = await page.request.put("/api/notifications", {
-      data: { notificationId: "nonexistent-id" },
+      data: { notificationId: "notif-1" },
       headers: { "X-CSRF-Token": csrfToken },
     });
-    expect([200, 404]).toContain(response.status());
-    if (response.status() === 200) {
-      const body = await response.json();
-      expect(body.notification.read).toBe(true);
-    }
+    expect(response.status()).toBe(200);
+    const body = await response.json();
+    expect(body.notification.read).toBe(true);
   });
 
   test("PUT mark-as-read returns 404 for nonexistent notification", async ({
