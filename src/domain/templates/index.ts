@@ -59,8 +59,10 @@ export const createTemplateSchema = z
       .transform((v) => v ?? null),
     body: z
       .string()
-      .min(1, "Body is required")
-      .refine((v) => htmlBodyRegex.test(v), {
+      .nullable()
+      .optional()
+      .transform((v) => v ?? "")
+      .refine((v) => v === "" || htmlBodyRegex.test(v), {
         message: "Body must contain valid HTML",
       }),
     category: z
@@ -109,10 +111,10 @@ export const sendTemplateSchema = z.object({
   replyTo: z
     .union([z.string().email(), z.array(z.string().email())])
     .optional(),
-  sponsorId: z.string().uuid().optional(),
-  dealId: z.string().uuid().optional(),
-  deliverableId: z.string().uuid().optional(),
-  paymentId: z.string().uuid().optional(),
+  sponsorId: z.string().optional(),
+  dealId: z.string().optional(),
+  deliverableId: z.string().optional(),
+  paymentId: z.string().optional(),
   variables: z.record(z.string()).optional(),
   preview: z.boolean().optional(),
 });

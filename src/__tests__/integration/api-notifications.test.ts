@@ -26,6 +26,39 @@ vi.mock("@/lib/db/queries/notifications", () => ({
 
 import { getServerSession } from "next-auth";
 
+const seedNotifications = [
+  {
+    id: "notif-1",
+    userId: "user-1",
+    type: "deadline_reminder",
+    title: "Upcoming Deadline",
+    message: "Due in 3 days",
+    relatedId: "deal-1",
+    read: false,
+    createdAt: new Date().toISOString(),
+  },
+  {
+    id: "notif-2",
+    userId: "user-1",
+    type: "payment_follow_up",
+    title: "Payment Due",
+    message: "Invoice #123",
+    relatedId: "deal-2",
+    read: false,
+    createdAt: new Date().toISOString(),
+  },
+  {
+    id: "notif-3",
+    userId: "user-1",
+    type: "overdue_deliverable",
+    title: "Overdue",
+    message: "Past due",
+    relatedId: "deal-3",
+    read: false,
+    createdAt: new Date().toISOString(),
+  },
+];
+
 const mockSession = { user: { id: "user-1", email: "test@test.com", name: "Test User" } };
 
 function mockAuth(session: typeof mockSession | null) {
@@ -47,26 +80,14 @@ describe("GET /api/notifications", () => {
   });
 
   it("returns notifications and unread count", async () => {
-    const notifications = [
-      {
-        id: "notif-1",
-        userId: "user-1",
-        type: "deadline_reminder",
-        title: "Upcoming Deadline",
-        message: "Due in 3 days",
-        relatedId: "deal-1",
-        read: false,
-        createdAt: new Date().toISOString(),
-      },
-    ];
-    mocks.getNotifications.mockResolvedValue(notifications);
-    mocks.getUnreadCount.mockResolvedValue(1);
+    mocks.getNotifications.mockResolvedValue(seedNotifications);
+    mocks.getUnreadCount.mockResolvedValue(seedNotifications.length);
 
     const response = await GET();
     expect(response.status).toBe(200);
     const body = await response.json();
-    expect(body.notifications).toEqual(notifications);
-    expect(body.unreadCount).toBe(1);
+    expect(body.notifications).toEqual(seedNotifications);
+    expect(body.unreadCount).toBe(seedNotifications.length);
   });
 
   it("returns empty array when no notifications exist", async () => {
@@ -109,7 +130,7 @@ describe("PUT /api/notifications", () => {
     mockAuth(null);
     const request = new Request("http://localhost:3000/api/notifications", {
       method: "PUT",
-      body: JSON.stringify({ notificationId: "notif-1" }),
+      body: JSON.stringify({ notificationId: seedNotifications[0].id }),
       headers: { "Content-Type": "application/json" },
     });
     const response = await PUT(request);
@@ -117,21 +138,13 @@ describe("PUT /api/notifications", () => {
   });
 
   it("marks a single notification as read", async () => {
-    const readNotif = {
-      id: "notif-1",
-      userId: "user-1",
-      type: "deadline_reminder",
-      title: "Test",
-      message: "Test",
-      relatedId: null,
-      read: true,
-      createdAt: new Date().toISOString(),
-    };
+    const seedNotif = seedNotifications[0];
+    const readNotif = { ...seedNotif, read: true };
     mocks.markRead.mockResolvedValue(readNotif);
 
     const request = new Request("http://localhost:3000/api/notifications", {
       method: "PUT",
-      body: JSON.stringify({ notificationId: "notif-1" }),
+      body: JSON.stringify({ notificationId: seedNotif.id }),
       headers: { "Content-Type": "application/json" },
     });
 
@@ -139,7 +152,7 @@ describe("PUT /api/notifications", () => {
     expect(response.status).toBe(200);
     const body = await response.json();
     expect(body.notification).toEqual(readNotif);
-    expect(mocks.markRead).toHaveBeenCalledWith("notif-1", "user-1");
+    expect(mocks.markRead).toHaveBeenCalledWith(seedNotif.id, "user-1");
   });
 
   it("returns 404 when notification not found", async () => {
@@ -158,7 +171,8 @@ describe("PUT /api/notifications", () => {
   });
 
   it("marks all notifications as read", async () => {
-    mocks.markAllRead.mockResolvedValue(3);
+    const markedCount = seedNotifications.length;
+    mocks.markAllRead.mockResolvedValue(markedCount);
 
     const request = new Request("http://localhost:3000/api/notifications", {
       method: "PUT",
@@ -169,7 +183,8 @@ describe("PUT /api/notifications", () => {
     const response = await PUT(request);
     expect(response.status).toBe(200);
     const body = await response.json();
-    expect(body.markedRead).toBe(3);
+    expect(body.markedRead).toBe(markedCount);
+    expect(body.markedRead).toBeGreaterThan(0);
     expect(mocks.markAllRead).toHaveBeenCalledWith("user-1");
   });
 
