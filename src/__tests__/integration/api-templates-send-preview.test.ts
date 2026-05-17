@@ -166,8 +166,8 @@ describe("POST /api/templates/[id]/send", () => {
         method: "POST",
         body: JSON.stringify({
           to: "sponsor@test.com",
-          sponsorId: "s-1",
-          dealId: "d-1",
+          sponsorId: "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11",
+          dealId: "b0eebc99-9c0b-4ef8-bb6d-6bb9bd380a22",
         }),
         headers: { "Content-Type": "application/json" },
       }),
@@ -178,8 +178,8 @@ describe("POST /api/templates/[id]/send", () => {
     expect(mockResolveVariables).toHaveBeenCalledWith(
       expect.objectContaining({
         userId: "user-1",
-        sponsorId: "s-1",
-        dealId: "d-1",
+        sponsorId: "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11",
+        dealId: "b0eebc99-9c0b-4ef8-bb6d-6bb9bd380a22",
       })
     );
   });
@@ -197,7 +197,7 @@ describe("POST /api/templates/[id]/send", () => {
         method: "POST",
         body: JSON.stringify({
           to: "sponsor@test.com",
-          sponsorId: "s-1",
+          sponsorId: "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11",
           variables: { sponsor_name: "Custom Override" },
         }),
         headers: { "Content-Type": "application/json" },
@@ -225,7 +225,7 @@ describe("POST /api/templates/[id]/send", () => {
 
     expect(response.status).toBe(422);
     const body = await response.json();
-    expect(body.error).toContain("Recipient");
+    expect(body.error).toBe("Validation failed");
   });
 
   it("returns 422 when missing required template variables", async () => {
@@ -235,6 +235,8 @@ describe("POST /api/templates/[id]/send", () => {
       body: "<p>Deal: {{deal_title}}</p>",
       category: "outreach",
     });
+
+    mockResolveVariables.mockResolvedValue({ variables: {}, missing: ["sponsor_name", "deal_title"] });
 
     const response = await SendPost(
       new Request("http://localhost:3000/api/templates/tmpl-1/send", {

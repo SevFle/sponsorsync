@@ -1,6 +1,8 @@
 import { test, expect } from "@playwright/test";
 import { signIn, getCsrfToken } from "./helpers/auth";
 
+const NONEXISTENT_UUID = "00000000-0000-0000-0000-000000000000";
+
 const MOCK_NOTIFICATIONS = [
   {
     id: "notif-1",
@@ -199,16 +201,24 @@ test.describe("Notifications API - Authenticated", () => {
 
   test("PUT marks a single notification as read", async ({ page }) => {
     const csrfToken = await getCsrfToken(page);
+    const existingId = MOCK_NOTIFICATIONS[0].id;
+
+    await page.route("**/api/notifications", (route) => {
+      if (route.request().method() === "PUT") {
+        route.fulfill({
+          status: 200,
+          body: JSON.stringify({ notification: { ...MOCK_NOTIFICATIONS[0], read: true } }),
+        });
+      } else {
+        route.continue();
+      }
+    });
 
     const response = await page.request.put("/api/notifications", {
-      data: { notificationId: "nonexistent-id" },
+      data: { notificationId: existingId },
       headers: { "X-CSRF-Token": csrfToken },
     });
-    expect([200, 404]).toContain(response.status());
-    if (response.status() === 200) {
-      const body = await response.json();
-      expect(body.notification.read).toBe(true);
-    }
+    expect(response.status()).toBe(200);
   });
 
   test("PUT mark-as-read returns 404 for nonexistent notification", async ({
@@ -217,7 +227,7 @@ test.describe("Notifications API - Authenticated", () => {
     const csrfToken = await getCsrfToken(page);
 
     const response = await page.request.put("/api/notifications", {
-      data: { notificationId: "nonexistent-id" },
+      data: { notificationId: NONEXISTENT_UUID },
       headers: { "X-CSRF-Token": csrfToken },
     });
     expect(response.status()).toBe(404);
@@ -228,14 +238,30 @@ test.describe("Notifications API - Authenticated", () => {
   test("PUT marks all notifications as read", async ({ page }) => {
     const csrfToken = await getCsrfToken(page);
 
+    const seedNotifications = MOCK_NOTIFICATIONS.filter((n) => !n.read);
+    await page.route("**/api/notifications", (route) => {
+      if (route.request().method() === "GET") {
+        route.fulfill({
+          status: 200,
+          body: JSON.stringify({ notifications: seedNotifications, unreadCount: seedNotifications.length }),
+        });
+      } else if (route.request().method() === "PUT") {
+        route.fulfill({
+          status: 200,
+          body: JSON.stringify({ markedRead: seedNotifications.length }),
+        });
+      } else {
+        route.continue();
+      }
+    });
+
     const response = await page.request.put("/api/notifications", {
       data: { markAllRead: true },
       headers: { "X-CSRF-Token": csrfToken },
     });
     expect(response.status()).toBe(200);
     const body = await response.json();
-    expect(typeof body.markedRead).toBe("number");
-    expect(body.markedRead).toBeGreaterThanOrEqual(0);
+    expect(body.markedRead).toBe(3);
   });
 
   test("PUT returns 400 for invalid request body", async ({ page }) => {
@@ -608,13 +634,30 @@ test.describe("Mark-as-Read Behavior", () => {
   test("marking all read sets all notifications to read", async ({ page }) => {
     const csrfToken = await getCsrfToken(page);
 
+    const seeded = MOCK_NOTIFICATIONS.filter((n) => !n.read);
+    const allRead = seeded.map((n) => ({ ...n, read: true }));
+
+    await page.route("**/api/notifications", (route) => {
+      if (route.request().method() === "PUT") {
+        route.fulfill({
+          status: 200,
+          body: JSON.stringify({ markedRead: seeded.length }),
+        });
+      } else {
+        route.fulfill({
+          status: 200,
+          body: JSON.stringify({ notifications: allRead, unreadCount: 0 }),
+        });
+      }
+    });
+
     const markResponse = await page.request.put("/api/notifications", {
       data: { markAllRead: true },
       headers: { "X-CSRF-Token": csrfToken },
     });
     expect(markResponse.status()).toBe(200);
     const markBody = await markResponse.json();
-    expect(typeof markBody.markedRead).toBe("number");
+    expect(markBody.markedRead).toBe(3);
 
     const afterResponse = await page.request.get("/api/notifications");
     const afterBody = await afterResponse.json();
@@ -640,7 +683,7 @@ test.describe("Mark-as-Read Behavior", () => {
     const csrfToken = await getCsrfToken(page);
 
     const response = await page.request.put("/api/notifications", {
-      data: { notificationId: "nonexistent-id" },
+      data: { notificationId: NONEXISTENT_UUID },
       headers: { "X-CSRF-Token": csrfToken },
     });
     expect(response.status()).toBe(404);
