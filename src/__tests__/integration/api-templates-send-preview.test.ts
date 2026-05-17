@@ -161,13 +161,16 @@ describe("POST /api/templates/[id]/send", () => {
       category: "outreach",
     });
 
+    const sponsorId = "550e8400-e29b-41d4-a716-446655440001";
+    const dealId = "550e8400-e29b-41d4-a716-446655440002";
+
     const response = await SendPost(
       new Request("http://localhost:3000/api/templates/tmpl-1/send", {
         method: "POST",
         body: JSON.stringify({
           to: "sponsor@test.com",
-          sponsorId: "s-1",
-          dealId: "d-1",
+          sponsorId,
+          dealId,
         }),
         headers: { "Content-Type": "application/json" },
       }),
@@ -178,8 +181,8 @@ describe("POST /api/templates/[id]/send", () => {
     expect(mockResolveVariables).toHaveBeenCalledWith(
       expect.objectContaining({
         userId: "user-1",
-        sponsorId: "s-1",
-        dealId: "d-1",
+        sponsorId,
+        dealId,
       })
     );
   });
@@ -197,7 +200,7 @@ describe("POST /api/templates/[id]/send", () => {
         method: "POST",
         body: JSON.stringify({
           to: "sponsor@test.com",
-          sponsorId: "s-1",
+          sponsorId: "550e8400-e29b-41d4-a716-446655440001",
           variables: { sponsor_name: "Custom Override" },
         }),
         headers: { "Content-Type": "application/json" },
@@ -225,15 +228,23 @@ describe("POST /api/templates/[id]/send", () => {
 
     expect(response.status).toBe(422);
     const body = await response.json();
-    expect(body.error).toContain("Recipient");
+    expect(body.error).toContain("Validation failed");
   });
 
   it("returns 422 when missing required template variables", async () => {
     (getTemplateById as ReturnType<typeof vi.fn>).mockResolvedValue({
       id: "tmpl-1",
       subject: "Hello {{sponsor_name}}",
-      body: "<p>Deal: {{deal_title}}</p>",
+      body: "<p>Deal: {{deal_title}} and {{unknown_var}}</p>",
       category: "outreach",
+    });
+    mockResolveVariables.mockResolvedValue({
+      variables: {
+        creator_name: "John",
+        sponsor_name: "Acme",
+        deal_title: "Big Deal",
+      },
+      missing: ["unknown_var"],
     });
 
     const response = await SendPost(
