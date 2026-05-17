@@ -50,9 +50,9 @@ export async function POST(request: Request) {
     const template = await createTemplate({
       userId: session.user.id,
       name: parsed.data.name,
-      subject: parsed.data.subject,
-      body: parsed.data.body,
-      category: parsed.data.category,
+      subject: parsed.data.subject ?? null,
+      body: parsed.data.body ?? "",
+      category: parsed.data.category ?? null,
       isDefault: false,
     });
     return NextResponse.json({ template }, { status: 201 });
