@@ -235,6 +235,10 @@ describe("POST /api/templates/[id]/send", () => {
       body: "<p>Deal: {{deal_title}}</p>",
       category: "outreach",
     });
+    mockResolveVariables.mockResolvedValue({
+      variables: {},
+      missing: ["sponsor_name", "deal_title"],
+    });
 
     const response = await SendPost(
       new Request("http://localhost:3000/api/templates/tmpl-1/send", {

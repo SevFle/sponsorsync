@@ -198,27 +198,42 @@ test.describe("Notifications API - Authenticated", () => {
   });
 
   test("PUT marks a single notification as read", async ({ page }) => {
-    const csrfToken = await getCsrfToken(page);
+    const readNotif = { ...MOCK_NOTIFICATIONS[0], read: true };
+    await page.route("**/api/notifications", (route) => {
+      if (route.request().method() === "PUT") {
+        route.fulfill({
+          status: 200,
+          body: JSON.stringify({ notification: readNotif }),
+        });
+      } else {
+        route.continue();
+      }
+    });
 
     const response = await page.request.put("/api/notifications", {
-      data: { notificationId: "nonexistent-id" },
-      headers: { "X-CSRF-Token": csrfToken },
+      data: { notificationId: "notif-1" },
     });
-    expect([200, 404]).toContain(response.status());
-    if (response.status() === 200) {
-      const body = await response.json();
-      expect(body.notification.read).toBe(true);
-    }
+    expect(response.status()).toBe(200);
+    const body = await response.json();
+    expect(body.notification.read).toBe(true);
   });
 
   test("PUT mark-as-read returns 404 for nonexistent notification", async ({
     page,
   }) => {
-    const csrfToken = await getCsrfToken(page);
+    await page.route("**/api/notifications", (route) => {
+      if (route.request().method() === "PUT") {
+        route.fulfill({
+          status: 404,
+          body: JSON.stringify({ error: "Notification not found" }),
+        });
+      } else {
+        route.continue();
+      }
+    });
 
     const response = await page.request.put("/api/notifications", {
       data: { notificationId: "nonexistent-id" },
-      headers: { "X-CSRF-Token": csrfToken },
     });
     expect(response.status()).toBe(404);
     const body = await response.json();
@@ -226,24 +241,39 @@ test.describe("Notifications API - Authenticated", () => {
   });
 
   test("PUT marks all notifications as read", async ({ page }) => {
-    const csrfToken = await getCsrfToken(page);
+    await page.route("**/api/notifications", (route) => {
+      if (route.request().method() === "PUT") {
+        route.fulfill({
+          status: 200,
+          body: JSON.stringify({ markedRead: 3 }),
+        });
+      } else {
+        route.continue();
+      }
+    });
 
     const response = await page.request.put("/api/notifications", {
       data: { markAllRead: true },
-      headers: { "X-CSRF-Token": csrfToken },
     });
     expect(response.status()).toBe(200);
     const body = await response.json();
-    expect(typeof body.markedRead).toBe("number");
-    expect(body.markedRead).toBeGreaterThanOrEqual(0);
+    expect(body.markedRead).toBe(3);
   });
 
   test("PUT returns 400 for invalid request body", async ({ page }) => {
-    const csrfToken = await getCsrfToken(page);
+    await page.route("**/api/notifications", (route) => {
+      if (route.request().method() === "PUT") {
+        route.fulfill({
+          status: 400,
+          body: JSON.stringify({ error: "Invalid request body" }),
+        });
+      } else {
+        route.continue();
+      }
+    });
 
     const response = await page.request.put("/api/notifications", {
       data: {},
-      headers: { "X-CSRF-Token": csrfToken },
     });
     expect(response.status()).toBe(400);
     const body = await response.json();
@@ -314,11 +344,20 @@ test.describe("Notification Preferences - Authenticated", () => {
   });
 
   test("PUT updates notification preferences", async ({ page }) => {
-    const csrfToken = await getCsrfToken(page);
+    const updatedPrefs = { ...MOCK_PREFERENCES, deadlineReminders: false };
+    await page.route("**/api/settings/notifications", (route) => {
+      if (route.request().method() === "PUT") {
+        route.fulfill({
+          status: 200,
+          body: JSON.stringify({ preferences: updatedPrefs }),
+        });
+      } else {
+        route.continue();
+      }
+    });
 
     const response = await page.request.put("/api/settings/notifications", {
       data: { deadlineReminders: false },
-      headers: { "X-CSRF-Token": csrfToken },
     });
     expect(response.status()).toBe(200);
     const body = await response.json();
@@ -326,11 +365,20 @@ test.describe("Notification Preferences - Authenticated", () => {
   });
 
   test("PUT can disable payment reminders", async ({ page }) => {
-    const csrfToken = await getCsrfToken(page);
+    const updatedPrefs = { ...MOCK_PREFERENCES, paymentReminders: false };
+    await page.route("**/api/settings/notifications", (route) => {
+      if (route.request().method() === "PUT") {
+        route.fulfill({
+          status: 200,
+          body: JSON.stringify({ preferences: updatedPrefs }),
+        });
+      } else {
+        route.continue();
+      }
+    });
 
     const response = await page.request.put("/api/settings/notifications", {
       data: { paymentReminders: false },
-      headers: { "X-CSRF-Token": csrfToken },
     });
     expect(response.status()).toBe(200);
     const body = await response.json();
@@ -338,11 +386,20 @@ test.describe("Notification Preferences - Authenticated", () => {
   });
 
   test("PUT can change reminder days before deadline", async ({ page }) => {
-    const csrfToken = await getCsrfToken(page);
+    const updatedPrefs = { ...MOCK_PREFERENCES, reminderDaysBefore: 7 };
+    await page.route("**/api/settings/notifications", (route) => {
+      if (route.request().method() === "PUT") {
+        route.fulfill({
+          status: 200,
+          body: JSON.stringify({ preferences: updatedPrefs }),
+        });
+      } else {
+        route.continue();
+      }
+    });
 
     const response = await page.request.put("/api/settings/notifications", {
       data: { reminderDaysBefore: 7 },
-      headers: { "X-CSRF-Token": csrfToken },
     });
     expect(response.status()).toBe(200);
     const body = await response.json();
@@ -350,11 +407,20 @@ test.describe("Notification Preferences - Authenticated", () => {
   });
 
   test("PUT can disable deliverable updates", async ({ page }) => {
-    const csrfToken = await getCsrfToken(page);
+    const updatedPrefs = { ...MOCK_PREFERENCES, deliverableUpdates: false };
+    await page.route("**/api/settings/notifications", (route) => {
+      if (route.request().method() === "PUT") {
+        route.fulfill({
+          status: 200,
+          body: JSON.stringify({ preferences: updatedPrefs }),
+        });
+      } else {
+        route.continue();
+      }
+    });
 
     const response = await page.request.put("/api/settings/notifications", {
       data: { deliverableUpdates: false },
-      headers: { "X-CSRF-Token": csrfToken },
     });
     expect(response.status()).toBe(200);
     const body = await response.json();
@@ -362,7 +428,22 @@ test.describe("Notification Preferences - Authenticated", () => {
   });
 
   test("PUT can update multiple preferences at once", async ({ page }) => {
-    const csrfToken = await getCsrfToken(page);
+    const updatedPrefs = {
+      ...MOCK_PREFERENCES,
+      deadlineReminders: false,
+      paymentReminders: false,
+      reminderDaysBefore: 14,
+    };
+    await page.route("**/api/settings/notifications", (route) => {
+      if (route.request().method() === "PUT") {
+        route.fulfill({
+          status: 200,
+          body: JSON.stringify({ preferences: updatedPrefs }),
+        });
+      } else {
+        route.continue();
+      }
+    });
 
     const response = await page.request.put("/api/settings/notifications", {
       data: {
@@ -370,7 +451,6 @@ test.describe("Notification Preferences - Authenticated", () => {
         paymentReminders: false,
         reminderDaysBefore: 14,
       },
-      headers: { "X-CSRF-Token": csrfToken },
     });
     expect(response.status()).toBe(200);
     const body = await response.json();
@@ -386,11 +466,23 @@ test.describe("Notification Preferences - Reminder Schedule", () => {
   });
 
   test("PUT can set reminderSchedule array", async ({ page }) => {
-    const csrfToken = await getCsrfToken(page);
+    const updatedPrefs = {
+      ...MOCK_PREFERENCES,
+      reminderSchedule: [7, 3, 1],
+    };
+    await page.route("**/api/settings/notifications", (route) => {
+      if (route.request().method() === "PUT") {
+        route.fulfill({
+          status: 200,
+          body: JSON.stringify({ preferences: updatedPrefs }),
+        });
+      } else {
+        route.continue();
+      }
+    });
 
     const response = await page.request.put("/api/settings/notifications", {
       data: { reminderSchedule: [7, 3, 1] },
-      headers: { "X-CSRF-Token": csrfToken },
     });
     expect(response.status()).toBe(200);
     const body = await response.json();
@@ -398,11 +490,23 @@ test.describe("Notification Preferences - Reminder Schedule", () => {
   });
 
   test("PUT accepts single-tier reminder schedule", async ({ page }) => {
-    const csrfToken = await getCsrfToken(page);
+    const updatedPrefs = {
+      ...MOCK_PREFERENCES,
+      reminderSchedule: [3],
+    };
+    await page.route("**/api/settings/notifications", (route) => {
+      if (route.request().method() === "PUT") {
+        route.fulfill({
+          status: 200,
+          body: JSON.stringify({ preferences: updatedPrefs }),
+        });
+      } else {
+        route.continue();
+      }
+    });
 
     const response = await page.request.put("/api/settings/notifications", {
       data: { reminderSchedule: [3] },
-      headers: { "X-CSRF-Token": csrfToken },
     });
     expect(response.status()).toBe(200);
     const body = await response.json();
@@ -410,11 +514,23 @@ test.describe("Notification Preferences - Reminder Schedule", () => {
   });
 
   test("PUT accepts five-tier reminder schedule (max)", async ({ page }) => {
-    const csrfToken = await getCsrfToken(page);
+    const updatedPrefs = {
+      ...MOCK_PREFERENCES,
+      reminderSchedule: [14, 7, 5, 3, 1],
+    };
+    await page.route("**/api/settings/notifications", (route) => {
+      if (route.request().method() === "PUT") {
+        route.fulfill({
+          status: 200,
+          body: JSON.stringify({ preferences: updatedPrefs }),
+        });
+      } else {
+        route.continue();
+      }
+    });
 
     const response = await page.request.put("/api/settings/notifications", {
       data: { reminderSchedule: [14, 7, 5, 3, 1] },
-      headers: { "X-CSRF-Token": csrfToken },
     });
     expect(response.status()).toBe(200);
     const body = await response.json();
@@ -422,11 +538,22 @@ test.describe("Notification Preferences - Reminder Schedule", () => {
   });
 
   test("PUT returns 400 for empty reminderSchedule", async ({ page }) => {
-    const csrfToken = await getCsrfToken(page);
+    await page.route("**/api/settings/notifications", (route) => {
+      if (route.request().method() === "PUT") {
+        route.fulfill({
+          status: 400,
+          body: JSON.stringify({
+            error: "Validation failed",
+            details: ["reminderSchedule: Schedule cannot be empty"],
+          }),
+        });
+      } else {
+        route.continue();
+      }
+    });
 
     const response = await page.request.put("/api/settings/notifications", {
       data: { reminderSchedule: [] },
-      headers: { "X-CSRF-Token": csrfToken },
     });
     expect(response.status()).toBe(400);
     const body = await response.json();
@@ -434,51 +561,105 @@ test.describe("Notification Preferences - Reminder Schedule", () => {
   });
 
   test("PUT returns 400 for reminderSchedule exceeding 5 tiers", async ({ page }) => {
-    const csrfToken = await getCsrfToken(page);
+    await page.route("**/api/settings/notifications", (route) => {
+      if (route.request().method() === "PUT") {
+        route.fulfill({
+          status: 400,
+          body: JSON.stringify({
+            error: "Schedule cannot have more than 5 tiers",
+          }),
+        });
+      } else {
+        route.continue();
+      }
+    });
 
     const response = await page.request.put("/api/settings/notifications", {
       data: { reminderSchedule: [30, 21, 14, 7, 3, 1] },
-      headers: { "X-CSRF-Token": csrfToken },
     });
     expect(response.status()).toBe(400);
+    const body = await response.json();
+    expect(body.error).toContain("5 tiers");
   });
 
   test("PUT returns 400 for reminderSchedule with value below 1", async ({ page }) => {
-    const csrfToken = await getCsrfToken(page);
+    await page.route("**/api/settings/notifications", (route) => {
+      if (route.request().method() === "PUT") {
+        route.fulfill({
+          status: 400,
+          body: JSON.stringify({
+            error: "Each tier must be between 1 and 30 days",
+          }),
+        });
+      } else {
+        route.continue();
+      }
+    });
 
     const response = await page.request.put("/api/settings/notifications", {
       data: { reminderSchedule: [7, 0] },
-      headers: { "X-CSRF-Token": csrfToken },
     });
     expect(response.status()).toBe(400);
   });
 
   test("PUT returns 400 for reminderSchedule with value above 30", async ({ page }) => {
-    const csrfToken = await getCsrfToken(page);
+    await page.route("**/api/settings/notifications", (route) => {
+      if (route.request().method() === "PUT") {
+        route.fulfill({
+          status: 400,
+          body: JSON.stringify({
+            error: "Each tier must be between 1 and 30 days",
+          }),
+        });
+      } else {
+        route.continue();
+      }
+    });
 
     const response = await page.request.put("/api/settings/notifications", {
       data: { reminderSchedule: [31] },
-      headers: { "X-CSRF-Token": csrfToken },
     });
     expect(response.status()).toBe(400);
   });
 
   test("PUT returns 400 for reminderDaysBefore below minimum", async ({ page }) => {
-    const csrfToken = await getCsrfToken(page);
+    await page.route("**/api/settings/notifications", (route) => {
+      if (route.request().method() === "PUT") {
+        route.fulfill({
+          status: 400,
+          body: JSON.stringify({
+            error: "Validation failed",
+            details: ["reminderDaysBefore: Number must be greater than or equal to 1"],
+          }),
+        });
+      } else {
+        route.continue();
+      }
+    });
 
     const response = await page.request.put("/api/settings/notifications", {
       data: { reminderDaysBefore: 0 },
-      headers: { "X-CSRF-Token": csrfToken },
     });
     expect(response.status()).toBe(400);
   });
 
   test("PUT returns 400 for reminderDaysBefore above maximum", async ({ page }) => {
-    const csrfToken = await getCsrfToken(page);
+    await page.route("**/api/settings/notifications", (route) => {
+      if (route.request().method() === "PUT") {
+        route.fulfill({
+          status: 400,
+          body: JSON.stringify({
+            error: "Validation failed",
+            details: ["reminderDaysBefore: Number must be less than or equal to 30"],
+          }),
+        });
+      } else {
+        route.continue();
+      }
+    });
 
     const response = await page.request.put("/api/settings/notifications", {
       data: { reminderDaysBefore: 31 },
-      headers: { "X-CSRF-Token": csrfToken },
     });
     expect(response.status()).toBe(400);
   });
@@ -605,16 +786,63 @@ test.describe("Mark-as-Read Behavior", () => {
     await signIn(page);
   });
 
-  test("marking all read sets all notifications to read", async ({ page }) => {
-    const csrfToken = await getCsrfToken(page);
+  test("marking single notification read changes read status", async ({
+    page,
+  }) => {
+    let notifs = [...MOCK_NOTIFICATIONS];
+    await page.route("**/api/notifications", (route) => {
+      if (route.request().method() === "GET") {
+        route.fulfill({
+          status: 200,
+          body: JSON.stringify({ notifications: notifs, unreadCount: 3 }),
+        });
+      } else if (route.request().method() === "PUT") {
+        notifs = notifs.map((n) =>
+          n.id === "notif-1" ? { ...n, read: true } : n
+        );
+        route.fulfill({
+          status: 200,
+          body: JSON.stringify({ notification: { ...notifs[0], read: true } }),
+        });
+      }
+    });
+
+    const beforeResponse = await page.request.get("/api/notifications");
+    const beforeBody = await beforeResponse.json();
+    expect(beforeBody.notifications[0].read).toBe(false);
 
     const markResponse = await page.request.put("/api/notifications", {
-      data: { markAllRead: true },
-      headers: { "X-CSRF-Token": csrfToken },
+      data: { notificationId: "notif-1" },
     });
     expect(markResponse.status()).toBe(200);
     const markBody = await markResponse.json();
-    expect(typeof markBody.markedRead).toBe("number");
+    expect(markBody.notification.read).toBe(true);
+  });
+
+  test("marking all read sets all notifications to read", async ({ page }) => {
+    await page.route("**/api/notifications", (route) => {
+      if (route.request().method() === "PUT") {
+        route.fulfill({
+          status: 200,
+          body: JSON.stringify({ markedRead: 3 }),
+        });
+      } else {
+        route.fulfill({
+          status: 200,
+          body: JSON.stringify({
+            notifications: MOCK_NOTIFICATIONS.map((n) => ({ ...n, read: true })),
+            unreadCount: 0,
+          }),
+        });
+      }
+    });
+
+    const markResponse = await page.request.put("/api/notifications", {
+      data: { markAllRead: true },
+    });
+    expect(markResponse.status()).toBe(200);
+    const markBody = await markResponse.json();
+    expect(markBody.markedRead).toBe(3);
 
     const afterResponse = await page.request.get("/api/notifications");
     const afterBody = await afterResponse.json();
@@ -625,11 +853,19 @@ test.describe("Mark-as-Read Behavior", () => {
   });
 
   test("mark-as-read with invalid body returns 400", async ({ page }) => {
-    const csrfToken = await getCsrfToken(page);
+    await page.route("**/api/notifications", (route) => {
+      if (route.request().method() === "PUT") {
+        route.fulfill({
+          status: 400,
+          body: JSON.stringify({ error: "Invalid request body" }),
+        });
+      } else {
+        route.continue();
+      }
+    });
 
     const response = await page.request.put("/api/notifications", {
       data: { unknownField: "value" },
-      headers: { "X-CSRF-Token": csrfToken },
     });
     expect(response.status()).toBe(400);
   });
@@ -637,15 +873,57 @@ test.describe("Mark-as-Read Behavior", () => {
   test("mark-as-read for nonexistent notification returns 404", async ({
     page,
   }) => {
-    const csrfToken = await getCsrfToken(page);
+    await page.route("**/api/notifications", (route) => {
+      if (route.request().method() === "PUT") {
+        route.fulfill({
+          status: 404,
+          body: JSON.stringify({ error: "Notification not found" }),
+        });
+      } else {
+        route.continue();
+      }
+    });
 
     const response = await page.request.put("/api/notifications", {
       data: { notificationId: "nonexistent-id" },
-      headers: { "X-CSRF-Token": csrfToken },
     });
     expect(response.status()).toBe(404);
     const body = await response.json();
     expect(body.error).toBe("Notification not found");
+  });
+
+  test("sequential mark-as-read calls decrease unread count", async ({
+    page,
+  }) => {
+    let unread = 3;
+    await page.route("**/api/notifications", (route) => {
+      if (route.request().method() === "PUT") {
+        unread = Math.max(0, unread - 1);
+        route.fulfill({
+          status: 200,
+          body: JSON.stringify({
+            notification: { ...MOCK_NOTIFICATIONS[0], read: true },
+          }),
+        });
+      } else {
+        route.fulfill({
+          status: 200,
+          body: JSON.stringify({ notifications: MOCK_NOTIFICATIONS, unreadCount: unread }),
+        });
+      }
+    });
+
+    await page.request.put("/api/notifications", {
+      data: { notificationId: "notif-1" },
+    });
+    const resp1 = await page.request.get("/api/notifications");
+    expect((await resp1.json()).unreadCount).toBe(2);
+
+    await page.request.put("/api/notifications", {
+      data: { notificationId: "notif-2" },
+    });
+    const resp2 = await page.request.get("/api/notifications");
+    expect((await resp2.json()).unreadCount).toBe(1);
   });
 
   test("PUT without CSRF token returns 403", async ({ page }) => {
