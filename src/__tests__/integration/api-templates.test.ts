@@ -178,7 +178,7 @@ describe("POST /api/templates edge cases", () => {
       name: "Full Template",
       subject: "Subject with {{variable}}",
       body: "<h1>Title</h1><p>Body with {{content}}</p>",
-      category: "follow_up",
+      category: "renewal",
     };
     const request = new Request("http://localhost:3000/api/templates", {
       method: "POST",
@@ -194,7 +194,7 @@ describe("POST /api/templates edge cases", () => {
   });
 
   it("handles template with minimal fields", async () => {
-    const templateData = { name: "Minimal" };
+    const templateData = { name: "Minimal", body: "<p>Minimal content</p>" };
     const request = new Request("http://localhost:3000/api/templates", {
       method: "POST",
       body: JSON.stringify(templateData),
@@ -207,7 +207,7 @@ describe("POST /api/templates edge cases", () => {
     expect(body.template.name).toBe("Minimal");
   });
 
-  it("handles template with empty body", async () => {
+  it("rejects template with empty body with 422", async () => {
     const templateData = { name: "Empty Body", body: "" };
     const request = new Request("http://localhost:3000/api/templates", {
       method: "POST",
@@ -216,7 +216,10 @@ describe("POST /api/templates edge cases", () => {
     });
 
     const response = await POST(request);
-    expect(response.status).toBe(201);
+    expect(response.status).toBe(422);
+    const body = await response.json();
+    expect(body.error).toBe("Validation failed");
+    expect(body.details).toBeDefined();
   });
 
   it("handles template with special characters in fields", async () => {
