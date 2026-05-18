@@ -27,10 +27,14 @@ export async function POST(
 
   const parsed = sendTemplateSchema.safeParse(body);
   if (!parsed.success) {
+    const fieldErrors = parsed.error.flatten().fieldErrors;
+    const errorMessage = fieldErrors.to
+      ? "Recipient is required"
+      : "Validation failed";
     return NextResponse.json(
       {
-        error: "Validation failed",
-        details: parsed.error.flatten().fieldErrors,
+        error: errorMessage,
+        details: fieldErrors,
       },
       { status: 422 }
     );

@@ -166,8 +166,8 @@ describe("POST /api/templates/[id]/send", () => {
         method: "POST",
         body: JSON.stringify({
           to: "sponsor@test.com",
-          sponsorId: "s-1",
-          dealId: "d-1",
+          sponsorId: "11111111-1111-1111-1111-111111111111",
+          dealId: "22222222-2222-2222-2222-222222222222",
         }),
         headers: { "Content-Type": "application/json" },
       }),
@@ -178,8 +178,8 @@ describe("POST /api/templates/[id]/send", () => {
     expect(mockResolveVariables).toHaveBeenCalledWith(
       expect.objectContaining({
         userId: "user-1",
-        sponsorId: "s-1",
-        dealId: "d-1",
+        sponsorId: "11111111-1111-1111-1111-111111111111",
+        dealId: "22222222-2222-2222-2222-222222222222",
       })
     );
   });
@@ -197,7 +197,7 @@ describe("POST /api/templates/[id]/send", () => {
         method: "POST",
         body: JSON.stringify({
           to: "sponsor@test.com",
-          sponsorId: "s-1",
+          sponsorId: "11111111-1111-1111-1111-111111111111",
           variables: { sponsor_name: "Custom Override" },
         }),
         headers: { "Content-Type": "application/json" },
@@ -234,6 +234,10 @@ describe("POST /api/templates/[id]/send", () => {
       subject: "Hello {{sponsor_name}}",
       body: "<p>Deal: {{deal_title}}</p>",
       category: "outreach",
+    });
+    mockResolveVariables.mockResolvedValue({
+      variables: {},
+      missing: ["sponsor_name", "deal_title"],
     });
 
     const response = await SendPost(
