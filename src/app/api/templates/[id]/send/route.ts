@@ -27,10 +27,19 @@ export async function POST(
 
   const parsed = sendTemplateSchema.safeParse(body);
   if (!parsed.success) {
+    const fieldErrors = parsed.error.flatten().fieldErrors;
+    const fieldLabelMap: Record<string, string> = {
+      to: "Recipient",
+      cc: "CC",
+      bcc: "BCC",
+      replyTo: "Reply-To",
+    };
+    const fields = Object.keys(fieldErrors);
+    const label = fields.map((f) => fieldLabelMap[f] || f).join(", ");
     return NextResponse.json(
       {
-        error: "Validation failed",
-        details: parsed.error.flatten().fieldErrors,
+        error: `Validation failed: ${label}`,
+        details: fieldErrors,
       },
       { status: 422 }
     );

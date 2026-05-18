@@ -117,7 +117,7 @@ describe("POST /api/templates/[id]/send - validation", () => {
     );
     expect(response.status).toBe(422);
     const body = await response.json();
-    expect(body.error).toBe("Validation failed");
+    expect(body.error).toContain("Validation failed");
   });
 
   it("returns 422 when to field is invalid email", async () => {
