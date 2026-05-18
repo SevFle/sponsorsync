@@ -5,6 +5,7 @@ export const TEMPLATE_CATEGORIES = [
   "deliverable",
   "payment",
   "renewal",
+  "follow_up",
   "custom",
 ] as const;
 
@@ -39,6 +40,12 @@ export const TEMPLATE_TYPE_VARIABLE_MAP: Record<TemplateCategory, string[]> = {
     "deal_start_date",
     "deal_end_date",
   ],
+  follow_up: [
+    "sponsor_name",
+    "creator_name",
+    "creator_show",
+    "deal_title",
+  ],
   custom: [],
 };
 
@@ -59,10 +66,11 @@ export const createTemplateSchema = z
       .transform((v) => v ?? null),
     body: z
       .string()
-      .min(1, "Body is required")
-      .refine((v) => htmlBodyRegex.test(v), {
+      .refine((v) => v === "" || htmlBodyRegex.test(v), {
         message: "Body must contain valid HTML",
-      }),
+      })
+      .optional()
+      .default(""),
     category: z
       .enum(TEMPLATE_CATEGORIES, { message: "Invalid category" })
       .nullable()
