@@ -225,7 +225,7 @@ describe("POST /api/templates/[id]/send", () => {
 
     expect(response.status).toBe(422);
     const body = await response.json();
-    expect(body.error).toContain("Recipient");
+    expect(body.error).toBe("Validation failed");
   });
 
   it("returns 422 when missing required template variables", async () => {
@@ -234,6 +234,10 @@ describe("POST /api/templates/[id]/send", () => {
       subject: "Hello {{sponsor_name}}",
       body: "<p>Deal: {{deal_title}}</p>",
       category: "outreach",
+    });
+    mockResolveVariables.mockResolvedValue({
+      variables: {},
+      missing: ["sponsor_name", "deal_title"],
     });
 
     const response = await SendPost(

@@ -75,3 +75,11 @@ export async function markAllNotificationsRead(userId: string) {
     .returning();
   return updated.length;
 }
+
+export async function deleteNotificationsByUserId(userId: string) {
+  const deleted = await db
+    .delete(notifications)
+    .where(eq(notifications.userId, userId))
+    .returning();
+  return deleted.length;
+}
