@@ -27,10 +27,15 @@ export async function POST(
 
   const parsed = sendTemplateSchema.safeParse(body);
   if (!parsed.success) {
+    const fieldErrors = parsed.error.flatten().fieldErrors;
+    let error = "Validation failed";
+    if (fieldErrors.to) {
+      error = "Recipient is required and must be a valid email address";
+    }
     return NextResponse.json(
       {
-        error: "Validation failed",
-        details: parsed.error.flatten().fieldErrors,
+        error,
+        details: fieldErrors,
       },
       { status: 422 }
     );

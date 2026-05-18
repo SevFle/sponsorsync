@@ -34,18 +34,26 @@ vi.mock("@/lib/email/emailService", () => ({
   checkRateLimit: (...args: unknown[]) => mockCheckRateLimit(...args),
 }));
 
-const mockResolveVariables = vi.fn().mockResolvedValue({
-  variables: {
-    creator_name: "John",
-    creator_show: "My Show",
-    sponsor_name: "Acme",
-    sponsor_company: "Acme Inc",
-    deal_title: "Big Deal",
-    deal_amount: "$500",
-    deliverable_title: "Ad Read",
-    due_date: "2025-03-15",
-  },
-  missing: [],
+const mockResolveVariables = vi.fn().mockImplementation((context: any) => {
+  if (!context.sponsorId && !context.dealId && !context.deliverableId && !context.paymentId) {
+    return Promise.resolve({
+      variables: {},
+      missing: [],
+    });
+  }
+  return Promise.resolve({
+    variables: {
+      creator_name: "John",
+      creator_show: "My Show",
+      sponsor_name: "Acme",
+      sponsor_company: "Acme Inc",
+      deal_title: "Big Deal",
+      deal_amount: "$500",
+      deliverable_title: "Ad Read",
+      due_date: "2025-03-15",
+    },
+    missing: [],
+  });
 });
 
 vi.mock("@/lib/templates/variableResolver", () => ({
@@ -76,18 +84,26 @@ beforeEach(() => {
     subject: "Test Subject",
   });
   mockCheckRateLimit.mockReturnValue({ allowed: true, remaining: 49 });
-  mockResolveVariables.mockResolvedValue({
-    variables: {
-      creator_name: "John",
-      creator_show: "My Show",
-      sponsor_name: "Acme",
-      sponsor_company: "Acme Inc",
-      deal_title: "Big Deal",
-      deal_amount: "$500",
-      deliverable_title: "Ad Read",
-      due_date: "2025-03-15",
-    },
-    missing: [],
+  mockResolveVariables.mockImplementation((context: any) => {
+    if (!context.sponsorId && !context.dealId && !context.deliverableId && !context.paymentId) {
+      return Promise.resolve({
+        variables: {},
+        missing: [],
+      });
+    }
+    return Promise.resolve({
+      variables: {
+        creator_name: "John",
+        creator_show: "My Show",
+        sponsor_name: "Acme",
+        sponsor_company: "Acme Inc",
+        deal_title: "Big Deal",
+        deal_amount: "$500",
+        deliverable_title: "Ad Read",
+        due_date: "2025-03-15",
+      },
+      missing: [],
+    });
   });
 });
 
