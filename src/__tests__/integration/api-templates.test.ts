@@ -178,7 +178,7 @@ describe("POST /api/templates edge cases", () => {
       name: "Full Template",
       subject: "Subject with {{variable}}",
       body: "<h1>Title</h1><p>Body with {{content}}</p>",
-      category: "follow_up",
+      category: "renewal",
     };
     const request = new Request("http://localhost:3000/api/templates", {
       method: "POST",

@@ -44,11 +44,25 @@ describe("createTemplateSchema", () => {
     expect(result.success).toBe(false);
   });
 
-  it("rejects missing body", () => {
+  it("allows missing body (defaults to empty string)", () => {
     const result = createTemplateSchema.safeParse({
       name: "Test",
     });
-    expect(result.success).toBe(false);
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.body).toBe("");
+    }
+  });
+
+  it("allows empty body string", () => {
+    const result = createTemplateSchema.safeParse({
+      name: "Test",
+      body: "",
+    });
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.body).toBe("");
+    }
   });
 
   it("rejects body without HTML tags", () => {
