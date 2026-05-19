@@ -200,15 +200,28 @@ test.describe("Notifications API - Authenticated", () => {
   test("PUT marks a single notification as read", async ({ page }) => {
     const csrfToken = await getCsrfToken(page);
 
-    const response = await page.request.put("/api/notifications", {
-      data: { notificationId: "nonexistent-id" },
+    const createRes = await page.request.post("/api/notifications", {
+      data: {
+        type: "deadline_reminder",
+        title: "Test Notification",
+        message: "Test message for mark-as-read",
+      },
       headers: { "X-CSRF-Token": csrfToken },
     });
-    expect([200, 404]).toContain(response.status());
-    if (response.status() === 200) {
-      const body = await response.json();
-      expect(body.notification.read).toBe(true);
-    }
+    expect(createRes.status()).toBe(201);
+    const { notification: created } = await createRes.json();
+    expect(created.id).toBeTruthy();
+    expect(created.read).toBe(false);
+
+    const response = await page.request.put("/api/notifications", {
+      data: { notificationId: created.id },
+      headers: { "X-CSRF-Token": csrfToken },
+    });
+    expect(response.status()).toBe(200);
+    const body = await response.json();
+    expect(body.notification.read).toBe(true);
+    expect(body.notification.id).toBe(created.id);
+    expect(body.notification.title).toBe("Test Notification");
   });
 
   test("PUT mark-as-read returns 404 for nonexistent notification", async ({
@@ -217,7 +230,7 @@ test.describe("Notifications API - Authenticated", () => {
     const csrfToken = await getCsrfToken(page);
 
     const response = await page.request.put("/api/notifications", {
-      data: { notificationId: "nonexistent-id" },
+      data: { notificationId: "00000000-0000-0000-0000-000000000000" },
       headers: { "X-CSRF-Token": csrfToken },
     });
     expect(response.status()).toBe(404);
@@ -228,14 +241,31 @@ test.describe("Notifications API - Authenticated", () => {
   test("PUT marks all notifications as read", async ({ page }) => {
     const csrfToken = await getCsrfToken(page);
 
+    await page.request.put("/api/notifications", {
+      data: { markAllRead: true },
+      headers: { "X-CSRF-Token": csrfToken },
+    });
+
+    const N = 3;
+    for (let i = 0; i < N; i++) {
+      const res = await page.request.post("/api/notifications", {
+        data: {
+          type: "deadline_reminder",
+          title: `Seeded Notification ${i}`,
+          message: `Seeded message ${i}`,
+        },
+        headers: { "X-CSRF-Token": csrfToken },
+      });
+      expect(res.status()).toBe(201);
+    }
+
     const response = await page.request.put("/api/notifications", {
       data: { markAllRead: true },
       headers: { "X-CSRF-Token": csrfToken },
     });
     expect(response.status()).toBe(200);
     const body = await response.json();
-    expect(typeof body.markedRead).toBe("number");
-    expect(body.markedRead).toBeGreaterThanOrEqual(0);
+    expect(body.markedRead).toBe(N);
   });
 
   test("PUT returns 400 for invalid request body", async ({ page }) => {
@@ -608,6 +638,22 @@ test.describe("Mark-as-Read Behavior", () => {
   test("marking all read sets all notifications to read", async ({ page }) => {
     const csrfToken = await getCsrfToken(page);
 
+    await page.request.put("/api/notifications", {
+      data: { markAllRead: true },
+      headers: { "X-CSRF-Token": csrfToken },
+    });
+
+    for (let i = 0; i < 2; i++) {
+      await page.request.post("/api/notifications", {
+        data: {
+          type: i === 0 ? "deadline_reminder" : "payment_follow_up",
+          title: `Behavior Test Notif ${i}`,
+          message: `Behavior test message ${i}`,
+        },
+        headers: { "X-CSRF-Token": csrfToken },
+      });
+    }
+
     const markResponse = await page.request.put("/api/notifications", {
       data: { markAllRead: true },
       headers: { "X-CSRF-Token": csrfToken },
@@ -615,6 +661,7 @@ test.describe("Mark-as-Read Behavior", () => {
     expect(markResponse.status()).toBe(200);
     const markBody = await markResponse.json();
     expect(typeof markBody.markedRead).toBe("number");
+    expect(markBody.markedRead).toBeGreaterThanOrEqual(2);
 
     const afterResponse = await page.request.get("/api/notifications");
     const afterBody = await afterResponse.json();
@@ -640,7 +687,7 @@ test.describe("Mark-as-Read Behavior", () => {
     const csrfToken = await getCsrfToken(page);
 
     const response = await page.request.put("/api/notifications", {
-      data: { notificationId: "nonexistent-id" },
+      data: { notificationId: "00000000-0000-0000-0000-000000000000" },
       headers: { "X-CSRF-Token": csrfToken },
     });
     expect(response.status()).toBe(404);
